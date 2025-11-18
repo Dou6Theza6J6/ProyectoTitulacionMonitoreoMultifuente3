@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\buildMultiTargeting\MonitoreoMultifuente3.props" />
+</Project>

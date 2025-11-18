@@ -1,0 +1,30 @@
+﻿@using MonitoreoMultifuente3.Components.Account
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<AuthorizeView>
+    <Authorized>
+        <div class="d-flex align-items-center">
+            <span class="text-light me-3">Hola, @context.User.Identity?.Name!</span>
+
+            <button class="btn btn-sm btn-outline-light" @onclick="BeginSignOut">Cerrar Sesión</button>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <a class="btn btn-sm btn-primary" href="/login">Iniciar Sesión</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Inject]
+    private DesktopAuthenticationStateProvider AuthProvider { get; set; } = default!;
+    // Esta función se ejecuta cuando haces clic en el botón
+    private void BeginSignOut()
+    {
+        // --- CORRECCIÓN ---
+        // Se quitó 'await' porque SignOut() es 'void'
+        AuthProvider.SignOut();
+
+        NavigationManager.NavigateTo("/", forceLoad: true); // Recarga la página
+    }
+}

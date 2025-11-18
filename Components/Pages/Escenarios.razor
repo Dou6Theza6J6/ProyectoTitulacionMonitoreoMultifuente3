@@ -1,0 +1,135 @@
+﻿@page "/Escenarios"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<PageTitle>Datos de Muestra</PageTitle>
+
+<h3>Gestión de Muestras y Ubicaciones</h3>
+<p>Define un tipo de muestra (escenario) y asígnale una ubicación física en el mapa.</p>
+
+<div class="row">
+    <!-- Columna del Formulario -->
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header">Registrar Nueva Muestra</div>
+            <div class="card-body">
+                <EditForm Model="@nuevoEscenario" OnValidSubmit="GuardarMuestra">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label><b>1. Nombre del Escenario</b> (Ej: Cenote, Pozo)</label>
+                        <InputText class="form-control" @bind-Value="nuevoEscenario.descripcion" placeholder="Ej: Agua de Lluvia del Techo" />
+                    </div>
+                    <div class="mb-3">
+                        <label><b>2. Nombre Descriptivo de la Ubicación</b></label>
+                        <InputText class="form-control" @bind-Value="nuevaUbicacion.nombre" placeholder="Ej: Casa Familiar, Mérida" />
+                    </div>
+                    <div class="mb-3">
+                        <label><b>3. Coordenadas (selecciona en el mapa)</b></label>
+                        <div class="input-group">
+                            <span class="input-group-text">Lat</span>
+                            <InputNumber class="form-control" @bind-Value="nuevaUbicacion.latitud" ReadOnly="true" />
+                            <span class="input-group-text">Lon</span>
+                            <InputNumber class="form-control" @bind-Value="nuevaUbicacion.longitud" ReadOnly="true" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Guardar Muestra</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+    <!-- Columna del Mapa -->
+    <div class="col-md-7">
+        <p><b>Haz clic en el mapa para seleccionar la ubicación exacta:</b></p>
+        <div id="map" style="height: 400px; width: 100%; border-radius: 8px; border: 1px solid #ccc;"></div>
+    </div>
+</div>
+
+<hr class="my-4" />
+
+<h4>Ubicaciones y Escenarios Registrados</h4>
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Escenario</th>
+                <th>Ubicación</th>
+                <th>Latitud</th>
+                <th>Longitud</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var escenario in escenarios)
+            {
+                <tr>
+                    <td>@escenario.descripcion</td>
+                    <td>@escenario.Ubicacion?.nombre</td>
+                    <td>@escenario.Ubicacion?.latitud</td>
+                    <td>@escenario.Ubicacion?.longitud</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private List<Escenario> escenarios = new();
+    private Escenario nuevoEscenario = new();
+    private Ubicacion nuevaUbicacion = new();
+    private DotNetObjectReference<Escenarios>? dotNetHelper;
+
+    protected override async Task OnInitializedAsync()
+    {
+        escenarios = await DbContext.Escenarios.Include(e => e.Ubicacion).ToListAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            dotNetHelper = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("initMap", dotNetHelper);
+        }
+    }
+
+    [JSInvokable]
+    public void SetMapCoordinates(double lat, double lng)
+    {
+        nuevaUbicacion.latitud = Math.Round(lat, 6);
+        nuevaUbicacion.longitud = Math.Round(lng, 6);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task GuardarMuestra()
+    {
+        nuevaUbicacion.created_at = DateTime.UtcNow;
+        nuevaUbicacion.updated_at = DateTime.UtcNow;
+        DbContext.Ubicaciones.Add(nuevaUbicacion);
+        await DbContext.SaveChangesAsync();
+
+        nuevoEscenario.ubicacion_id = nuevaUbicacion.ubicacion_id;
+        nuevoEscenario.created_at = DateTime.UtcNow;
+        nuevoEscenario.updated_at = DateTime.UtcNow;
+        DbContext.Escenarios.Add(nuevoEscenario);
+        await DbContext.SaveChangesAsync();
+
+        escenarios = await DbContext.Escenarios.Include(e => e.Ubicacion).ToListAsync();
+        nuevoEscenario = new();
+        nuevaUbicacion = new();
+        StateHasChanged();
+    }
+
+    // --- MÉTODO AÑADIDO PARA SOLUCIONAR EL ERROR ---
+    public async ValueTask DisposeAsync()
+    {
+        // La advertencia sobre 'await' se soluciona devolviendo un ValueTask completado.
+        if (dotNetHelper != null)
+        {
+            dotNetHelper.Dispose();
+        }
+        await Task.CompletedTask;
+    }
+}
+

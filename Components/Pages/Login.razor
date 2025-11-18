@@ -1,0 +1,174 @@
+﻿@page "/login"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using MonitoreoMultifuente3.Components.Account
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject RoleManager<IdentityRole<int>> RoleManager
+
+<PageTitle>Acceso de Usuario</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link @(showLogin ? "active" : "")" style="cursor: pointer;" @onclick="() => showLogin = true">Iniciar Sesión</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(!showLogin ? "active" : "")" style="cursor: pointer;" @onclick="() => showLogin = false">Registrarse</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                @if (showLogin)
+                {
+                    <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+                        <DataAnnotationsValidator />
+                        <h5 class="card-title">Acceso de Usuario</h5>
+
+                        <ValidationSummary class="text-danger" />
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Correo Electrónico</label>
+                            <InputText id="email" class="form-control" @bind-Value="loginModel.Email" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Contraseña</label>
+                            <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Entrar</button>
+                    </EditForm>
+                }
+                else
+                {
+                    <EditForm Model="registerModel" OnValidSubmit="HandleRegister">
+                        <DataAnnotationsValidator />
+                        <h5 class="card-title">Crear Nueva Cuenta</h5>
+
+                        <ValidationSummary class="text-danger" />
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+
+                        <div class="mb-3">
+                            <label for="regName" class="form-label">Nombre</label>
+                            <InputText id="regName" class="form-control" @bind-Value="registerModel.Name" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="regEmail" class="form-label">Correo Electrónico</label>
+                            <InputText id="regEmail" class="form-control" @bind-Value="registerModel.Email" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="regPassword" class="form-label">Contraseña</label>
+                            <InputText id="regPassword" type="password" class="form-control" @bind-Value="registerModel.Password" />
+                        </div>
+                        <button type="submit" class="btn btn-success">Registrar</button>
+                    </EditForm>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool showLogin = true;
+    private LoginModel loginModel = new();
+    private RegisterModel registerModel = new();
+    private string? errorMessage;
+
+    [Inject]
+    private DesktopAuthenticationStateProvider AuthProvider { get; set; } = default!;
+
+    private async Task HandleLogin()
+    {
+        errorMessage = null;
+        try
+        {
+            // --- CORRECCIÓN ---
+            // Llamamos a SignIn directamente con ambos parámetros.
+            // Ya no usamos UserManager o SignInManager aquí.
+            var result = await AuthProvider.SignIn(loginModel.Email, loginModel.Password);
+
+            if (result)
+            {
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Credenciales incorrectas.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "Error al iniciar sesión. Intente de nuevo.";
+            // Opcional: log 'ex'
+        }
+    }
+
+    private async Task HandleRegister()
+    {
+        errorMessage = null;
+        var newUser = new ApplicationUser
+            {
+                UserName = registerModel.Email,
+                Email = registerModel.Email,
+                name_varChar = registerModel.Name
+            };
+
+        var result = await UserManager.CreateAsync(newUser, registerModel.Password);
+
+        if (result.Succeeded)
+        {
+            const string defaultRole = "Usuario";
+            if (!await RoleManager.RoleExistsAsync(defaultRole))
+            {
+                await RoleManager.CreateAsync(new IdentityRole<int>(defaultRole));
+            }
+            await UserManager.AddToRoleAsync(newUser, defaultRole);
+
+            // --- CORRECCIÓN ---
+            // Inicia sesión automáticamente después de registrarse
+            // Pasando el email y la contraseña del formulario.
+            await AuthProvider.SignIn(registerModel.Email, registerModel.Password);
+            NavigationManager.NavigateTo("/");
+        }
+        else
+        {
+            errorMessage = result.Errors.FirstOrDefault()?.Description ?? "Error desconocido al registrar.";
+        }
+    }
+
+    public class LoginModel
+    {
+        [Required(ErrorMessage = "El correo es obligatorio.")]
+        [EmailAddress(ErrorMessage = "El formato del correo no es válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        public string Password { get; set; } = "";
+    }
+
+    public class RegisterModel
+    {
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        public string Name { get; set; } = "";
+
+        [Required(ErrorMessage = "El correo es obligatorio.")]
+        [EmailAddress(ErrorMessage = "El formato del correo no es válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        [MinLength(6, ErrorMessage = "La contraseña debe tener al menos 6 caracteres.")]
+        public string Password { get; set; } = "";
+    }
+}

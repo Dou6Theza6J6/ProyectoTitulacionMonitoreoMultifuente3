@@ -1,0 +1,269 @@
+﻿@page "/monitoreo"
+@page "/monitoreo/{SensorId:int}"
+
+@using MonitoreoMultifuente3.Models
+@using MonitoreoMultifuente3.Data
+@using MonitoreoMultifuente3.Components.Pages.MonitoreoTabs
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject SensorDataService SensorService
+@implements IDisposable
+
+<PageTitle>Monitoreo</PageTitle>
+
+@* --- SECCIÓN DE CONEXIÓN ARDUINO (MODIFICADA) --- *@
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">Conexión de Dispositivo (Arduino)</h5>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <label for="comPortSelect" class="form-label">Puerto COM Disponible:</label>
+                <select id="comPortSelect" @bind="selectedPort" class="form-select" disabled="@isListening">
+                    <option value="">Seleccionar Puerto</option>
+                    @if (availablePorts != null)
+                    {
+                        @foreach (var port in availablePorts)
+                        {
+                            <option value="@port">@port</option>
+                        }
+                    }
+                </select>
+            </div>
+
+            @* --- CAMBIO EN BOTONES --- *@
+            <div class="col-md-5 mt-3 mt-md-0">
+                @if (!isListening)
+                {
+                    @* 1. Botón CONECTAR (Solo se muestra si no está conectado) *@
+                    <button class="btn btn-primary w-100 mt-4" @onclick="StartListening" disabled="@(string.IsNullOrEmpty(selectedPort))">
+                        <span>Conectar</span>
+                    </button>
+                }
+                else
+                {
+                    @* 2. Botón DESCONECTAR (Solo se muestra si SÍ está conectado) *@
+                    <button class="btn btn-danger w-100 mt-4" @onclick="StopListening">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span> Desconectar de @selectedPort</span>
+                    </button>
+                }
+            </div>
+
+            <div class="col-md-3 mt-3 mt-md-0">
+                @if (isListening && latestData == null)
+                {
+                    <div class="alert alert-info p-2 text-center mb-0">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Esperando...
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger p-2 text-center mb-0">@errorMessage</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@* --- SECCIÓN DE DATOS EN VIVO (Sin cambios) --- *@
+@if (latestData != null && isListening)
+{
+    @* ... (El HTML de datos en vivo se queda igual) ... *@
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Datos en Vivo (Sensor: @latestData.Escenario)</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong>pH:</strong>
+                            <span>@latestData.PH.ToString("F2") (CV: @latestData.PhCV.ToString("F2")%)</span>
+                            <span class="badge bg-primary rounded-pill">@latestData.PhStatus</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong>Turbidez (NTU):</strong>
+                            <span>@latestData.TurbidezNTU.ToString("F2") (CV: @latestData.TurbidezCV.ToString("F2")%)</span>
+                            <span class="badge bg-primary rounded-pill">@latestData.TurbidezStatus</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong>Temperatura (°C):</strong>
+                            <span>@latestData.TemperaturaC.ToString("F2") (CV: @latestData.TemperaturaCV.ToString("F2")%)</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong>Conductividad (µS/cm):</strong>
+                            <span>@latestData.ConductividadUsScm.ToString("F2") (CV: @latestData.ConductividadCV.ToString("F2")%)</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* --- SECCIÓN DE HISTORIAL (Sin cambios) --- *@
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h5 class="mb-0">Historial de Mediciones para: @sensorActual?.nombre_sensor</h5>
+
+        <ul class="nav nav-tabs card-header-tabs mt-2" id="parametroTab" role="tablist">
+            @foreach (var parametro in parametrosDelSensor)
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link @(parametro.parametro_id == selectedParametroId ? "active" : "")"
+                            id="tab-@parametro.parametro_id"
+                            data-bs-toggle="tab"
+                            data-bs-target="#content-@parametro.parametro_id"
+                            type="button"
+                            role="tab"
+                            @onclick="() => selectedParametroId = parametro.parametro_id">
+                        @parametro.nombre_parametro
+                    </button>
+                </li>
+            }
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="parametroTabContent">
+            @if (SensorId == 0)
+            {
+                <div class="alert alert-info">Por favor, seleccione un sensor desde el menú de navegación.</div>
+            }
+            else
+            {
+                @foreach (var parametro in parametrosDelSensor)
+                {
+                    <div class="tab-pane fade @(parametro.parametro_id == selectedParametroId ? "show active" : "")"
+                         id="content-@parametro.parametro_id"
+                         role="tabpanel">
+
+                        @if (parametro.parametro_id == selectedParametroId)
+                        {
+                            <TablaMedicionesSensor SensorId="SensorId" ParametroId="selectedParametroId" />
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+
+@code {
+    [Parameter]
+    public int SensorId { get; set; } = 0;
+
+    private Sensor? sensorActual;
+    private List<Parametro> parametrosDelSensor = new List<Parametro>();
+    private int selectedParametroId;
+
+    // --- Variables de Arduino ---
+    private string[] availablePorts = Array.Empty<string>();
+    private string selectedPort = "";
+    private LecturaArduinoDto? latestData;
+    private bool isListening = false;
+    private string? errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        using (var dbContext = DbFactory.CreateDbContext())
+        {
+            if (SensorId > 0)
+            {
+                sensorActual = await dbContext.Sensores.FindAsync(SensorId);
+
+                parametrosDelSensor = await dbContext.Parametros
+                                            .Where(p => p.sensor_id == SensorId)
+                                            .OrderBy(p => p.parametro_id)
+                                            .ToListAsync();
+
+                if (parametrosDelSensor.Any() && selectedParametroId == 0)
+                {
+                    selectedParametroId = parametrosDelSensor.First().parametro_id;
+                }
+            }
+            else
+            {
+                parametrosDelSensor.Clear();
+                sensorActual = null;
+            }
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        // Carga los puertos solo si no estamos escuchando
+        if (!isListening)
+        {
+            availablePorts = SensorService.GetAvailablePorts();
+            if (availablePorts.Length > 0)
+            {
+                selectedPort = availablePorts[0];
+            }
+        }
+        SensorService.OnDataReceived += HandleDataReceived;
+    }
+
+    private void StartListening()
+    {
+        errorMessage = null;
+        latestData = null;
+        if (!string.IsNullOrEmpty(selectedPort))
+        {
+            bool success = SensorService.StartListening(selectedPort);
+            if (success)
+            {
+                isListening = true;
+            }
+            else
+            {
+                errorMessage = $"Error: No se pudo abrir el puerto {selectedPort}.";
+            }
+        }
+    }
+
+    // --- NUEVO MÉTODO PARA EL BOTÓN DESCONECTAR ---
+    private void StopListening()
+    {
+        isListening = false;
+        latestData = null; // Limpia los datos en vivo
+        errorMessage = null;
+        SensorService.StopListening(); // Llama al método del servicio
+
+        // Recarga los puertos COM disponibles, ya que ahora están libres
+        availablePorts = SensorService.GetAvailablePorts();
+        if (availablePorts.Length > 0)
+        {
+            selectedPort = availablePorts[0];
+        }
+
+        StateHasChanged(); // Forzar actualización de la UI
+    }
+
+    private void HandleDataReceived(LecturaArduinoDto lectura)
+    {
+        latestData = lectura;
+        InvokeAsync(StateHasChanged);
+    }
+
+  
+    public void Dispose()
+    {
+        SensorService.OnDataReceived -= HandleDataReceived;
+
+        // Solo detiene el puerto si TODAVÍA está escuchando cuando se destruye la página
+        if (isListening)
+        {
+            SensorService.StopListening();
+        }
+    }
+}

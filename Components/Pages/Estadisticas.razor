@@ -1,0 +1,272 @@
+﻿@page "/estadisticas"
+@attribute [Authorize]
+
+@using ChartJs.Blazor.Common
+@using ChartJs.Blazor.LineChart
+@using ChartJs.Blazor.Common.Axes
+@using ChartJs.Blazor.Common.Enums
+@using Microsoft.EntityFrameworkCore
+@using MonitoreoMultifuente3.Data
+@using MonitoreoMultifuente3.Models
+@using MonitoreoMultifuente3.Enums
+@using OfficeOpenXml
+@using System.IO
+
+@* --- AQUÍ ESTÁ LA CORRECCIÓN --- *@
+@* Esto arregla los errores:
+    - 'LinearCartesianTicks' no se encontró
+    - 'LinearCartesianAxis' no contiene 'Id' (porque era un error en cascada)
+*@
+@using ChartJs.Blazor.Common.Axes.Ticks
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<h3>Estadísticas de Calidad del Agua</h3>
+
+@* (Tu HTML de filtros y botones se queda igual) *@
+<div class="row g-3 align-items-center mb-3">
+    <div class="col-auto">
+        <label for="fechaInicio" class="form-label">Fecha Inicio:</label>
+        <InputDate id="fechaInicio" class="form-control" @bind-Value="fechaInicio" />
+    </div>
+    <div class="col-auto">
+        <label for="fechaFin" class="form-label">Fecha Fin:</label>
+        <InputDate id="fechaFin" class="form-control" @bind-Value="fechaFin" />
+    </div>
+    <div class="col-auto align-self-end">
+        <button class="btn btn-primary" @onclick="CargarDatosGrafica">Filtrar</button>
+    </div>
+    <div class="col-auto align-self-end">
+        <button class="btn btn-secondary" @onclick='() => AplicarFiltro("dia")'>Hoy</button>
+        <button class="btn btn-secondary" @onclick='() => AplicarFiltro("semana")'>Semana</button>
+        <button class="btn btn-secondary" @onclick='() => AplicarFiltro("mes")'>Mes</button>
+    </div>
+</div>
+
+<div class="mb-3">
+    <button class="btn btn-success" @onclick="ExportarAExcel">
+        <span class="oi oi-document"></span> Exportar a Excel
+    </button>
+</div>
+
+<hr />
+
+<div style="width: 80%;">
+    <Chart Config="_lineChartConfig" @ref="_lineChart"></Chart>
+</div>
+
+@code {
+    private Chart? _lineChart;
+    private DateTime? fechaInicio = DateTime.Today.AddDays(-7);
+    private DateTime? fechaFin = DateTime.Today.AddDays(1).AddTicks(-1);
+
+    // 1. Configuración de la gráfica
+    private LineConfig _lineChartConfig = new LineConfig
+        {
+            Options = new LineOptions
+            {
+                Responsive = true,
+                Title = new OptionsTitle { Display = true, Text = "Historial de Mediciones por Parámetro" },
+                Scales = new Scales
+                {
+                    XAxes = new List<CartesianAxis> { new CategoryAxis { ScaleLabel = new ScaleLabel { Display = true, LabelString = "Tiempo" } } },
+                    YAxes = new List<CartesianAxis>() // Se llena dinámicamente
+                }
+            }
+        };
+
+    // 2. Carga inicial
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CargarDatosGrafica();
+        }
+    }
+
+    private async Task CargarDatosGrafica()
+    {
+        List<Medicion> medicionesGrafica;
+        using (var dbContext = DbFactory.CreateDbContext())
+        {
+            var query = dbContext.Mediciones
+                                 .Include(m => m.Parametro)
+                                 .Include(m => m.Sensor)
+                                 .AsQueryable();
+
+            if (fechaInicio.HasValue)
+                query = query.Where(m => m.created_at >= fechaInicio.Value);
+            if (fechaFin.HasValue)
+                query = query.Where(m => m.created_at <= fechaFin.Value);
+
+            medicionesGrafica = await query.OrderBy(m => m.created_at).ToListAsync();
+        }
+
+        _lineChartConfig.Data.Labels.Clear();
+        _lineChartConfig.Data.Datasets.Clear();
+        _lineChartConfig.Options.Scales.YAxes.Clear();
+
+        var todasLasEtiquetas = medicionesGrafica
+                                .Select(m => m.created_at.ToLocalTime().ToString("g"))
+                                .Distinct()
+                                .ToList();
+
+        foreach (var etiqueta in todasLasEtiquetas)
+        {
+            _lineChartConfig.Data.Labels.Add(etiqueta);
+        }
+
+        // Agrupamos por el objeto Parametro completo
+        var grupos = medicionesGrafica
+            .Where(m => m.Parametro != null) // Arregla "Desreferencia NULL"
+            .GroupBy(m => m.Parametro);
+
+        int axisIndex = 0;
+
+        foreach (var grupo in grupos)
+        {
+            var parametro = grupo.Key;
+            if (parametro == null) continue; // Doble chequeo
+
+            string yAxisId = $"y-axis-{parametro.parametro_id}";
+
+            var yAxis = new LinearCartesianAxis
+                {
+                    //AxisId = yAxisId,
+                    Display = AxisDisplay.True,
+                    Position = (axisIndex % 2 == 0) ? Position.Left : Position.Right,
+                    ScaleLabel = new ScaleLabel
+                    {
+                        Display = true,
+                        LabelString = parametro.unidad_medida // Usamos tu modelo
+                    },
+                    Ticks = new LinearCartesianTicks // Ahora sí se encuentra esta clase
+                    {
+                        BeginAtZero = true
+                    }
+                };
+
+            _lineChartConfig.Options.Scales.YAxes.Add(yAxis);
+
+            var dataPoints = new List<double?>();
+            foreach (var etiqueta in todasLasEtiquetas)
+            {
+                var medicionParaEsteTiempo = grupo.FirstOrDefault(m =>
+                    m.created_at.ToLocalTime().ToString("g") == etiqueta);
+
+               if (medicionParaEsteTiempo != null)
+                {
+                    var valor = (medicionParaEsteTiempo.Sensor?.tipo == 1) ? (double?)medicionParaEsteTiempo.valor_cv_decimal : medicionParaEsteTiempo.valor_analogico;
+                    dataPoints.Add(valor);
+                }
+                else
+                {
+                    dataPoints.Add(null);
+                  }
+            }
+
+            var lineDataSet = new LineDataset<double?>(dataPoints)
+                {
+                    Label = parametro.nombre_parametro, // Usamos tu modelo
+                    BorderColor = ObtenerColorAleatorio(),
+                    Fill = false,
+                    LineTension = 0.1f,
+                    YAxisId = yAxisId
+                };
+
+            _lineChartConfig.Data.Datasets.Add(lineDataSet);
+            axisIndex++;
+        }
+
+        StateHasChanged();
+    }
+
+    private void AplicarFiltro(string rango)
+    {
+        // (Este método se queda igual)
+        var hoy = DateTime.Today;
+        switch (rango)
+        {
+            case "dia":
+                fechaInicio = hoy;
+                fechaFin = hoy.AddDays(1).AddTicks(-1);
+                break;
+            case "semana":
+                fechaInicio = hoy.AddDays(-(int)hoy.DayOfWeek);
+                fechaFin = fechaInicio.Value.AddDays(7).AddTicks(-1);
+                break;
+            case "mes":
+                fechaInicio = new DateTime(hoy.Year, hoy.Month, 1);
+                fechaFin = fechaInicio.Value.AddMonths(1).AddTicks(-1);
+                break;
+        }
+        _ = CargarDatosGrafica();
+    }
+
+    private async Task ExportarAExcel()
+    {
+        // (Este método se queda igual)
+        List<Medicion> medicionesParaExportar;
+        using (var dbContext = DbFactory.CreateDbContext())
+        {
+            var query = dbContext.Mediciones
+                                 .Include(m => m.Sensor)
+                                 .Include(m => m.Parametro)
+                                 .AsQueryable();
+
+            if (fechaInicio.HasValue)
+                query = query.Where(m => m.created_at >= fechaInicio.Value);
+            if (fechaFin.HasValue)
+                query = query.Where(m => m.created_at <= fechaFin.Value);
+
+            medicionesParaExportar = await query.OrderBy(m => m.created_at).ToListAsync();
+        }
+
+        if (!medicionesParaExportar.Any())
+        {
+            System.Windows.MessageBox.Show("No hay datos filtrados para exportar.", "Advertencia");
+            return;
+        }
+
+        string carpetaDocumentos = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string nombreArchivo = $"Reporte_Mediciones_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+        string rutaCompleta = Path.Combine(carpetaDocumentos, nombreArchivo);
+
+        using (var package = new ExcelPackage(new FileInfo(rutaCompleta)))
+        {
+            var ws = package.Workbook.Worksheets.Add("Mediciones");
+            ws.Cells[1, 1].Value = "ID Medición";
+            ws.Cells[1, 2].Value = "Sensor";
+            ws.Cells[1, 3].Value = "Parámetro";
+            ws.Cells[1, 4].Value = "Valor Medido";
+            ws.Cells[1, 5].Value = "Fecha y Hora";
+            ws.Cells[1, 6].Value = "Status";
+
+            for (int i = 0; i < medicionesParaExportar.Count; i++)
+            {
+                var medicion = medicionesParaExportar[i];
+                int fila = i + 2;
+                ws.Cells[fila, 1].Value = medicion.registro_medicion_id;
+                ws.Cells[fila, 2].Value = medicion.Sensor?.nombre_sensor;
+                ws.Cells[fila, 3].Value = medicion.Parametro?.nombre_parametro;
+               var valor = (medicion.Sensor?.tipo == 1) ? (decimal?)medicion.valor_cv_decimal : (decimal?)medicion.valor_analogico;
+                ws.Cells[fila, 4].Value = valor;
+                ws.Cells[fila, 4].Style.Numberformat.Format = "0.00";
+                ws.Cells[fila, 5].Value = medicion.created_at.ToLocalTime();
+                ws.Cells[fila, 5].Style.Numberformat.Format = "dd/MM/yyyy hh:mm AM/PM";
+                ws.Cells[fila, 6].Value = ((StatusMedicion)medicion.status_enum).ToString();
+            }
+
+            ws.Cells[ws.Dimension.Address].AutoFitColumns();
+            await package.SaveAsync();
+        }
+
+        System.Windows.MessageBox.Show($"Reporte guardado exitosamente en: {rutaCompleta}", "Exportación Exitosa");
+    }
+
+    private string ObtenerColorAleatorio()
+    {
+        var r = new Random();
+        return $"rgba({r.Next(0, 255)}, {r.Next(0, 255)}, {r.Next(0, 255)}, 0.8)";
+    }
+}

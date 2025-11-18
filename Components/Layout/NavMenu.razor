@@ -1,0 +1,91 @@
+﻿@* MonitoreoMultifuente3/Components/Layout/NavMenu.razor *@
+
+@* CAMBIO: Inyectamos la FÁBRICA *@
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@using Microsoft.EntityFrameworkCore
+@using MonitoreoMultifuente3.Models
+
+@* ... (Todo tu HTML del NavMenu se queda igual) ... *@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Monitoreo App</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Inicio
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="login">
+                <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Login
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="Escenarios">
+                <span class="bi bi-eyedropper-nav-menu" aria-hidden="true"></span> Escenarios
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="configuracion-sensores">
+                <span class="bi bi-cpu-fill-nav-menu" aria-hidden="true"></span> Configuración
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <div class="nav-link" @onclick="ToggleMonitoreoSubMenu" style="cursor: pointer;">
+                <span class="bi bi-speedometer2-nav-menu" aria-hidden="true"></span>
+                Monitoreo
+                <span class="oi @(collapseMonitoreoSubMenu ? "oi-caret-bottom" : "oi-caret-right")" style="float: right;"></span>
+            </div>
+
+            <div class="@(collapseMonitoreoSubMenu ? "collapse show" : "collapse")">
+                <nav class="flex-column">
+
+                    @foreach (var sensor in sensores)
+                    {
+                        <div class="nav-item px-3 ms-4">
+                            <NavLink class="nav-link" href="@($"monitoreo/{sensor.sensor_id}")">
+                                <span class="bi bi-dot" aria-hidden="true"></span> @sensor.nombre_sensor
+                            </NavLink>
+                        </div>
+                    }
+                </nav>
+            </div>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="estadisticas">
+                <span class="bi bi-graph-up-nav-menu" aria-hidden="true"></span> Estadísticas
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseMonitoreoSubMenu = true;
+    private List<Sensor> sensores = new();
+
+    // CAMBIO: Usamos la fábrica para crear un DbContext de corta duración
+    protected override async Task OnInitializedAsync()
+    {
+        // Creamos un contexto SÓLO para esta operación.
+        using (var dbContext = DbFactory.CreateDbContext())
+        {
+            sensores = await dbContext.Sensores
+                                    .OrderBy(s => s.sensor_id)
+                                    .ToListAsync();
+        }
+    }
+
+    private void ToggleMonitoreoSubMenu()
+    {
+        collapseMonitoreoSubMenu = !collapseMonitoreoSubMenu;
+    }
+}
