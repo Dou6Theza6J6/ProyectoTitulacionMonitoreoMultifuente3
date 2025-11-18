@@ -254,7 +254,7 @@
                 ws.Cells[fila, 4].Style.Numberformat.Format = "0.00";
                 ws.Cells[fila, 5].Value = medicion.created_at.ToLocalTime();
                 ws.Cells[fila, 5].Style.Numberformat.Format = "dd/MM/yyyy hh:mm AM/PM";
-                ws.Cells[fila, 6].Value = ((StatusMedicion)medicion.status_enum).ToString();
+                ws.Cells[fila, 6].Value = ((StatusMedicion)medicion.status).ToString();
             }
 
             ws.Cells[ws.Dimension.Address].AutoFitColumns();

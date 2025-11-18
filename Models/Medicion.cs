@@ -32,8 +32,8 @@ namespace MonitoreoMultifuente3.Models
         [ForeignKey("escenario_id")]
         public virtual Escenario Escenario { get; set; } = null!;
 
-        [Column("status_enum")]
-        public int status_enum { get; set; }
+        [Column("status")]
+        public int status { get; set; }
 
         [Column("valor_cv_decimal", TypeName = "decimal(10, 4)")]
         public decimal? valor_cv_decimal { get; set; }

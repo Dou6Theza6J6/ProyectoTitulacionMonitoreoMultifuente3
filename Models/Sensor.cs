@@ -11,8 +11,8 @@ public class Sensor
     public int tipo{ get; set; }
     public decimal precio { get; set; }
 
-   public DateTime Created_At { get; set; }
-   public DateTime Updated_At { get; set; }
+   public DateTime created_at { get; set; }
+   public DateTime updated_at { get; set; }
     public virtual ICollection<Parametro> Parametros { get; set; } = new List<Parametro>();
     public virtual ICollection<Medicion> Mediciones { get; set; } = new List<Medicion>();
 }

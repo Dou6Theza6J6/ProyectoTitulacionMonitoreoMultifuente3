@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MonitoreoMultifuente3.Data;
 
@@ -11,9 +12,11 @@ using MonitoreoMultifuente3.Data;
 namespace MonitoreoMultifuente3.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251118230818_CambiosEnSensorYMedicion")]
+    partial class CambiosEnSensorYMedicion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -465,7 +468,7 @@ namespace MonitoreoMultifuente3.Migrations
 
                     b.Property<int>("status")
                         .HasColumnType("int")
-                        .HasColumnName("status");
+                        .HasColumnName("status_enum");
 
                     b.Property<DateTime>("updated_at")
                         .HasColumnType("datetime(6)")

@@ -36,7 +36,7 @@
 
                         <td>@(medicion.valor_cv_decimal.HasValue ? medicion.valor_cv_decimal.Value.ToString("F2") : "---")</td>
 
-                        <td>@((StatusMedicion)medicion.status_enum)</td>
+                        <td>@((StatusMedicion)medicion.status)</td>
                         <td>@medicion.fecha_hora.ToString("g")</td> 
                     </tr>
                 }
