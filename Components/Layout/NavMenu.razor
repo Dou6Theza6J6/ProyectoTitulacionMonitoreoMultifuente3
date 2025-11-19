@@ -1,91 +1,174 @@
-﻿@* MonitoreoMultifuente3/Components/Layout/NavMenu.razor *@
-
-@* CAMBIO: Inyectamos la FÁBRICA *@
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+﻿@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JSRuntime
 @using Microsoft.EntityFrameworkCore
 @using MonitoreoMultifuente3.Models
+@using Microsoft.AspNetCore.Components.Authorization
 
-@* ... (Todo tu HTML del NavMenu se queda igual) ... *@
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Monitoreo App</a>
+        <a class="navbar-brand" href="">
+            <img src="images/icons/Home.png" style="height:24px; margin-right:10px;" />
+            MONITOREO APP
+        </a>
     </div>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
+    <nav class="flex-column h-100">
 
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Inicio
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="login">
-                <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Login
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="Escenarios">
-                <span class="bi bi-eyedropper-nav-menu" aria-hidden="true"></span> Escenarios
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="configuracion-sensores">
-                <span class="bi bi-cpu-fill-nav-menu" aria-hidden="true"></span> Configuración
+                <img src="images/icons/Home.png" class="nav-icon-img" /> Inicio
             </NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <div class="nav-link" @onclick="ToggleMonitoreoSubMenu" style="cursor: pointer;">
-                <span class="bi bi-speedometer2-nav-menu" aria-hidden="true"></span>
-                Monitoreo
-                <span class="oi @(collapseMonitoreoSubMenu ? "oi-caret-bottom" : "oi-caret-right")" style="float: right;"></span>
-            </div>
+        <AuthorizeView>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="login">
+                        <img src="images/icons/Login.png" class="nav-icon-img" /> Iniciar Sesión
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
 
-            <div class="@(collapseMonitoreoSubMenu ? "collapse show" : "collapse")">
-                <nav class="flex-column">
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Escenarios">
+                        <img src="images/icons/DatosDeMuestra.png" class="nav-icon-img" /> Escenarios
+                    </NavLink>
+                </div>
 
-                    @foreach (var sensor in sensores)
-                    {
-                        <div class="nav-item px-3 ms-4">
-                            <NavLink class="nav-link" href="@($"monitoreo/{sensor.sensor_id}")">
-                                <span class="bi bi-dot" aria-hidden="true"></span> @sensor.nombre_sensor
-                            </NavLink>
-                        </div>
-                    }
-                </nav>
-            </div>
-        </div>
+                <div class="nav-item px-3">
+                    <div class="nav-link" @onclick="ToggleMonitoreoSubMenu" style="cursor: pointer;">
+                        <img src="images/icons/Monitoreo.png" class="nav-icon-img" />
+                        Monitoreo
+                        <span class="oi @(collapseMonitoreoSubMenu ? "oi-caret-bottom" : "oi-caret-right")" style="float: right;"></span>
+                    </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="estadisticas">
-                <span class="bi bi-graph-up-nav-menu" aria-hidden="true"></span> Estadísticas
-            </NavLink>
-        </div>
+                    <div class="@(collapseMonitoreoSubMenu ? "collapse show" : "collapse")">
+                        <nav class="flex-column">
+                            <div class="nav-item px-3 ms-4">
+                                <NavLink class="nav-link" href="monitoreo">
+                                    <span class="bi bi-grid" aria-hidden="true"></span> General
+                                </NavLink>
+                            </div>
+                            @foreach (var sensor in sensores)
+                            {
+                                <div class="nav-item px-3 ms-4">
+                                    <NavLink class="nav-link" href="@($"monitoreo/{sensor.sensor_id}")">
+                                        <span class="bi bi-dot" aria-hidden="true"></span> @sensor.nombre_sensor
+                                    </NavLink>
+                                </div>
+                            }
+                        </nav>
+                    </div>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="estadisticas">
+                        <img src="images/icons/Estadisticas.png" class="nav-icon-img" /> Estadísticas
+                    </NavLink>
+                </div>
+
+                <div class="flex-grow-1"></div>
+                <hr class="text-white mx-3 my-2 opacity-50" />
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="configuracion">
+                        <img src="images/icons/Configuracion.png" class="nav-icon-img" /> Configuración
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3 my-2">
+                    <div class="d-flex justify-content-around bg-dark bg-opacity-50 rounded p-2 border border-secondary align-items-center">
+
+                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "light" ? "bg-white bg-opacity-25 rounded shadow-sm" : "opacity-50")"
+                                @onclick='() => CambiarTema("light")' title="Modo Claro">
+                            <img src="images/modoclaro.svg" alt="Claro" style="width: 22px; height: 22px;" />
+                        </button>
+
+                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "dark" ? "bg-white bg-opacity-25 rounded shadow-sm" : "opacity-50")"
+                                @onclick='() => CambiarTema("dark")' title="Modo Oscuro">
+                            <img src="images/modooscuro.svg" alt="Oscuro" style="width: 22px; height: 22px;" />
+                        </button>
+
+                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "auto" ? "bg-white bg-opacity-25 rounded shadow-sm" : "opacity-50")"
+                                @onclick='() => CambiarTema("auto")' title="Predeterminado del Sistema">
+                            <img src="images/modopredeterminado.svg" alt="Auto" style="width: 22px; height: 22px;" />
+                        </button>
+                    </div>
+                </div>
+                <div class="nav-item px-3 pb-3">
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="" />
+                        <button type="submit" class="nav-link btn btn-link text-danger w-100 text-start ps-0">
+                            <img src="images/icons/Login.png" class="nav-icon-img" style="filter: hue-rotate(140deg);" /> Salir
+                        </button>
+                    </form>
+                </div>
+
+            </Authorized>
+        </AuthorizeView>
     </nav>
 </div>
 
 @code {
     private bool collapseMonitoreoSubMenu = true;
     private List<Sensor> sensores = new();
+    private string currentTheme = "auto";
 
-    // CAMBIO: Usamos la fábrica para crear un DbContext de corta duración
     protected override async Task OnInitializedAsync()
     {
-        // Creamos un contexto SÓLO para esta operación.
         using (var dbContext = DbFactory.CreateDbContext())
         {
-            sensores = await dbContext.Sensores
-                                    .OrderBy(s => s.sensor_id)
-                                    .ToListAsync();
+            sensores = await dbContext.Sensores.OrderBy(s => s.sensor_id).ToListAsync();
         }
     }
 
-    private void ToggleMonitoreoSubMenu()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        collapseMonitoreoSubMenu = !collapseMonitoreoSubMenu;
+        if (firstRender)
+        {
+            // Recuperar tema guardado para iluminar el botón correcto
+            currentTheme = await JSRuntime.InvokeAsync<string>("ThemeManager.getSavedTheme");
+            StateHasChanged();
+        }
     }
+
+    private async Task CambiarTema(string theme)
+    {
+        currentTheme = theme;
+        await JSRuntime.InvokeVoidAsync("ThemeManager.setTheme", theme);
+    }
+
+    private void ToggleMonitoreoSubMenu() => collapseMonitoreoSubMenu = !collapseMonitoreoSubMenu;
 }
+
+<style>
+    .nav-scrollable {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 3.5rem);
+    }
+
+    .flex-grow-1 {
+        flex-grow: 1;
+    }
+
+    .nav-icon-img {
+        width: 20px;
+        height: 20px;
+        margin-right: 10px;
+        object-fit: contain;
+    }
+
+    .nav-link {
+        display: flex;
+        align-items: center;
+    }
+</style>

@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @using MonitoreoMultifuente3.Components.Layout
+@using Microsoft.AspNetCore.Components.Authorization
 
 <div class="page">
     <div class="sidebar">
@@ -14,5 +15,21 @@
         <article class="content px-4">
             @Body
         </article>
+
+        @* --- DIAGNÓSTICO FLOTANTE (SOLO PARA ADMINS) --- *@
+        <AuthorizeView Roles="Administrador">
+            <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100;">
+                <div class="toast show align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body small">
+                            <i class="bi bi-shield-check me-2"></i>
+                            Modo <strong>Administrador</strong> Activo
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+        </AuthorizeView>
+
     </main>
 </div>

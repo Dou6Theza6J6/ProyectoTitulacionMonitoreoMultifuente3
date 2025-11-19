@@ -11,7 +11,7 @@
 
 <PageTitle>Acceso de Usuario</PageTitle>
 
-<div class="row justify-content-center">
+<div class="row justify-content-center mt-5">
     <div class="col-md-6">
         <div class="card shadow-sm">
             <div class="card-header">
@@ -29,7 +29,7 @@
                 {
                     <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
                         <DataAnnotationsValidator />
-                        <h5 class="card-title">Acceso de Usuario</h5>
+                        <h5 class="card-title text-center mb-4">Bienvenido</h5>
 
                         <ValidationSummary class="text-danger" />
                         @if (!string.IsNullOrEmpty(errorMessage))
@@ -39,20 +39,22 @@
 
                         <div class="mb-3">
                             <label for="email" class="form-label">Correo Electrónico</label>
-                            <InputText id="email" class="form-control" @bind-Value="loginModel.Email" />
+                            <InputText id="email" class="form-control" @bind-Value="loginModel.Email" placeholder="nombre@ejemplo.com" />
                         </div>
                         <div class="mb-3">
                             <label for="password" class="form-label">Contraseña</label>
-                            <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" />
+                            <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" placeholder="******" />
                         </div>
-                        <button type="submit" class="btn btn-primary">Entrar</button>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Entrar</button>
+                        </div>
                     </EditForm>
                 }
                 else
                 {
                     <EditForm Model="registerModel" OnValidSubmit="HandleRegister">
                         <DataAnnotationsValidator />
-                        <h5 class="card-title">Crear Nueva Cuenta</h5>
+                        <h5 class="card-title text-center mb-4">Crear Nueva Cuenta</h5>
 
                         <ValidationSummary class="text-danger" />
                         @if (!string.IsNullOrEmpty(errorMessage))
@@ -61,7 +63,7 @@
                         }
 
                         <div class="mb-3">
-                            <label for="regName" class="form-label">Nombre</label>
+                            <label for="regName" class="form-label">Nombre Completo</label>
                             <InputText id="regName" class="form-control" @bind-Value="registerModel.Name" />
                         </div>
                         <div class="mb-3">
@@ -72,7 +74,9 @@
                             <label for="regPassword" class="form-label">Contraseña</label>
                             <InputText id="regPassword" type="password" class="form-control" @bind-Value="registerModel.Password" />
                         </div>
-                        <button type="submit" class="btn btn-success">Registrar</button>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">Registrar</button>
+                        </div>
                     </EditForm>
                 }
             </div>
@@ -86,6 +90,7 @@
     private RegisterModel registerModel = new();
     private string? errorMessage;
 
+    // Inyectamos directamente el proveedor personalizado
     [Inject]
     private DesktopAuthenticationStateProvider AuthProvider { get; set; } = default!;
 
@@ -94,10 +99,8 @@
         errorMessage = null;
         try
         {
-            // --- CORRECCIÓN ---
-            // Llamamos a SignIn directamente con ambos parámetros.
-            // Ya no usamos UserManager o SignInManager aquí.
-            var result = await AuthProvider.SignIn(loginModel.Email, loginModel.Password);
+            // Asegúrate de usar LoginAsync aquí
+            var result = await AuthProvider.LoginAsync(loginModel.Email, loginModel.Password);
 
             if (result)
             {
@@ -108,10 +111,9 @@
                 errorMessage = "Credenciales incorrectas.";
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            errorMessage = "Error al iniciar sesión. Intente de nuevo.";
-            // Opcional: log 'ex'
+            errorMessage = "Error: " + ex.Message;
         }
     }
 
@@ -119,16 +121,17 @@
     {
         errorMessage = null;
         var newUser = new ApplicationUser
-            {
-                UserName = registerModel.Email,
-                Email = registerModel.Email,
-                name_varChar = registerModel.Name
-            };
+        {
+            UserName = registerModel.Email,
+            Email = registerModel.Email,
+            name_varChar = registerModel.Name
+        };
 
         var result = await UserManager.CreateAsync(newUser, registerModel.Password);
 
         if (result.Succeeded)
         {
+            // Asignar rol por defecto
             const string defaultRole = "Usuario";
             if (!await RoleManager.RoleExistsAsync(defaultRole))
             {
@@ -136,10 +139,9 @@
             }
             await UserManager.AddToRoleAsync(newUser, defaultRole);
 
-            // --- CORRECCIÓN ---
-            // Inicia sesión automáticamente después de registrarse
-            // Pasando el email y la contraseña del formulario.
-            await AuthProvider.SignIn(registerModel.Email, registerModel.Password);
+            // CAMBIO IMPORTANTE: Usamos LoginAsync en lugar de SignIn
+            await AuthProvider.LoginAsync(registerModel.Email, registerModel.Password);
+
             NavigationManager.NavigateTo("/");
         }
         else

@@ -1,11 +1,13 @@
 ﻿@page "/configuracion-sensores"
-@attribute [Authorize]
+@* ESTA LÍNEA ES LA CLAVE DE LA SEGURIDAD *@
+@attribute [Authorize(Roles = "Administrador")]
+
 @using Microsoft.EntityFrameworkCore
-@using MonitoreoMultifuente3.Services // Asegúrate que este using esté
+@using MonitoreoMultifuente3.Services
 @inject ApplicationDbContext DbContext
-@inject SensorStatusService StatusService // Inyecta el servicio de estado
+@inject SensorStatusService StatusService
 @inject IJSRuntime JSRuntime
-@implements IDisposable // Para poder usar el Timer
+@implements IDisposable
 
 <PageTitle>Configuración de Sensores</PageTitle>
 
@@ -90,25 +92,29 @@
                     <th>ID</th>
                     <th>Nombre Sensor</th>
                     <th>Tipo</th>
-                    <th>Estado Actual</th>
-                    <th>Parámetros Asociados</th>
+                    <th>Estado</th>
+                    <th>Creado</th>
+                    <th>Actualizado</th>
+                    <th>Parámetros</th>
+                    <th>Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var sensor in sensores)
                 {
                     <tr>
-                        <td>@sensor.sensor_id</td> 
+                        <td>@sensor.sensor_id</td>
                         <td>@sensor.nombre_sensor</td>
                         <td>@(sensor.tipo == 0 ? "Analógico" : "Digital")</td>
                         <td>
                             @{
-                                // Se llama al servicio para obtener el estado del sensor
-                              var estado = StatusService.GetSensorState(sensor.sensor_id); 
-                              var statusClass = estado == SensorState.Activo ? "bg-success" : (estado == SensorState.Inactivo ? "bg-secondary" : "bg-danger");    
-                                <span class="badge @GetStatusClass(estado)">@estado</span> 
+                                var estado = StatusService.GetSensorState(sensor.sensor_id);
+                                <span class="badge @GetStatusClass(estado)">@estado</span>
                             }
                         </td>
+                        <td>@sensor.created_at.ToLocalTime().ToString("g")</td>
+                        <td>@sensor.updated_at.ToLocalTime().ToString("g")</td>
+
                         <td>
                             @if (sensor.Parametros != null && sensor.Parametros.Any())
                             {
@@ -118,6 +124,9 @@
                             {
                                 <span class="text-muted">Sin parámetros</span>
                             }
+                        </td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" @onclick="() => EliminarSensor(sensor.sensor_id)">Eliminar</button>
                         </td>
                     </tr>
                 }
@@ -155,6 +164,8 @@ else
     private async Task GuardarSensor()
     {
         // Validaciones básicas (puedes añadir más)
+        nuevoSensor.created_at = DateTime.UtcNow; // Agregar esto
+        nuevoSensor.updated_at = DateTime.UtcNow; // Agregar esto
         if (string.IsNullOrWhiteSpace(nuevoSensor.nombre_sensor) || string.IsNullOrWhiteSpace(nuevoSensor.modelo))
         {
             // Podrías mostrar un mensaje de error al usuario

@@ -1,6 +1,4 @@
-﻿// MonitoreoMultifuente3/Services/SensorDataService.cs
-
-using System.IO.Ports;
+﻿using System.IO.Ports;
 using System.Text.Json;
 using System.Diagnostics;
 using MonitoreoMultifuente3.Data;
@@ -11,12 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore; // <-- Asegúrate de tener este
-using System.Linq; // <-- Asegúrate de tener este
-
-// --- 1. AÑADE ESTOS 2 USINGS PARA FIREBASE ---
-using Firebase.Database;
-using Firebase.Database.Query;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace MonitoreoMultifuente3.Services
 {
@@ -26,22 +20,22 @@ namespace MonitoreoMultifuente3.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private string _jsonBuffer = string.Empty;
 
-        // --- 2. AÑADE ESTAS 2 LÍNEAS PARA FIREBASE ---
-        private readonly FirebaseClient _firebaseClient;
-        // --- ¡¡CAMBIA ESTA URL POR LA DE TU PROYECTO!! ---
-        private const string FirebaseDatabaseUrl = "https://console.firebase.google.com/u/6/project/monitoreoturbideznube/database/monitoreoturbideznube-default-rtdb/data/~2F?hl=es-419";
+        // --- NUEVO: Variable para guardar el Escenario seleccionado en la UI ---
+        private int _currentEscenarioId = 0;
 
         public event Action<LecturaArduinoDto>? OnDataReceived;
 
         public SensorDataService(IServiceScopeFactory scopeFactory)
         {
             _scopeFactory = scopeFactory;
-
-            // --- 3. AÑADE ESTA LÍNEA (INICIALIZA FIREBASE) ---
-            _firebaseClient = new FirebaseClient(FirebaseDatabaseUrl);
         }
 
-        // ... (GetAvailablePorts y StartListening se quedan igual) ...
+        // --- NUEVO: Método para recibir el ID desde la página Monitoreo.razor ---
+        public void SetCurrentEscenario(int escenarioId)
+        {
+            _currentEscenarioId = escenarioId;
+            Debug.WriteLine($"Servicio configurado para Escenario ID: {_currentEscenarioId}");
+        }
 
         public string[] GetAvailablePorts()
         {
@@ -107,7 +101,6 @@ namespace MonitoreoMultifuente3.Services
             return line;
         }
 
-        // --- 4. MODIFICA ESTE MÉTODO ---
         private void ProcessJsonLine(string jsonString)
         {
             if (string.IsNullOrWhiteSpace(jsonString) || !jsonString.StartsWith("{") || !jsonString.EndsWith("}"))
@@ -123,14 +116,11 @@ namespace MonitoreoMultifuente3.Services
 
                 if (lectura != null)
                 {
-                    // 1. Notificar a la UI (Sin cambios)
+                    // 1. Notificar a la UI
                     OnDataReceived?.Invoke(lectura);
 
-                    // 2. Guardar en la DB Local (MySQL) (Sin cambios)
+                    // 2. Guardar en la DB Local (MySQL)
                     Task.Run(() => SaveDataToDatabase(lectura));
-
-                    // --- 5. AÑADE ESTA LÍNEA: Guardar en Firebase ---
-                    Task.Run(() => SaveDataToFirebase(lectura));
                 }
             }
             catch (JsonException ex)
@@ -139,100 +129,73 @@ namespace MonitoreoMultifuente3.Services
             }
         }
 
-        // --- 6. AÑADE ESTE MÉTODO NUEVO COMPLETO ---
-        private async Task SaveDataToFirebase(LecturaArduinoDto lectura)
-        {
-            try
-            {
-                // Guarda la lectura completa en un nodo "mediciones_en_vivo"
-                // y usa el timestamp como clave única.
-                await _firebaseClient
-                  .Child("mediciones_en_vivo")
-                  .Child(lectura.TimestampMs.ToString()) // ID único
-                  .PutAsync(lectura);
-
-                Debug.WriteLine($"Datos guardados en Firebase: {lectura.TimestampMs}");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error al guardar en Firebase: {ex.Message}");
-            }
-        }
-
-        // --- 7. ESTE ES TU MÉTODO DE GUARDADO EN MYSQL (LO DEJAMOS IGUAL) ---
-        // (Este es el código robusto que arregla el guardado de Turbidez, etc.)
-        // MonitoreoMultifuente3/Services/SensorDataService.cs
-        // (Solo reemplaza este método)
-        // MonitoreoMultifuente3/Services/SensorDataService.cs
-        // (Solo reemplaza este método)
         private async Task SaveDataToDatabase(LecturaArduinoDto lectura)
         {
+            // Validar que se haya seleccionado un escenario
+            if (_currentEscenarioId == 0)
+            {
+                Debug.WriteLine("ADVERTENCIA: No se guardaron datos porque no hay un escenario seleccionado.");
+                return;
+            }
+
             using (var scope = _scopeFactory.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                // --- CORRECCIÓN ---
-                // Usamos 'nombre_parametro_varChar' para que coincida con tu modelo Parametro.cs
+                // Carga los parámetros (Asegúrate que los nombres coinciden con tu DB)
                 var parametros = await dbContext.Parametros
                     .ToDictionaryAsync(p => p.nombre_parametro, p => p.parametro_id);
 
-                var timestamp = DateTime.Now;
-                int idSensorEjemplo = 1;
-                int idEscenarioEjemplo = 1;
-                int idUsuarioEjemplo = 1;
+                var timestamp = DateTime.UtcNow; // Recomendado usar UTC
+                int idSensorEjemplo = 1; // Esto podrías hacerlo dinámico también si tienes múltiples sensores físicos
+                int idUsuarioEjemplo = 1; // O el ID del usuario logueado si tienes autenticación
 
                 var mediciones = new List<Medicion>();
 
-                // ¡¡IMPORTANTE!!
-                // Revisa que estos nombres ("pH", "Turbidez", etc.) sean
-                // EXACTAMENTE iguales a como están en tu tabla 'parametros'.
-
-                // Intenta guardar pH
+                // --- Guardar pH ---
                 if (parametros.TryGetValue("pH", out int idPH))
                 {
                     mediciones.Add(new Medicion
                     {
                         sensor_id = idSensorEjemplo,
                         parametro_id = idPH,
-                        escenario_id = idEscenarioEjemplo,
-                       valor_analogico = (double)lectura.PH,
+                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
+                        valor_analogico = (double)lectura.PH,
                         status = (int)MapStatus(lectura.PhStatus),
                         valor_cv_decimal = (decimal)lectura.PhCV,
-                       fecha_hora = timestamp, 
+                        fecha_hora = timestamp,
                         created_at = timestamp,
-                        user_id= idUsuarioEjemplo,
+                        user_id = idUsuarioEjemplo,
                         created_by = idUsuarioEjemplo
                     });
                 }
-                else { Debug.WriteLine("Error de guardado: No se encontró el parámetro 'pH' en la BD."); }
 
-                // Intenta guardar Turbidez
-                if (parametros.TryGetValue("Turbidez", out int idTurbidez)) // <-- REVISA ESTE NOMBRE
+                // --- Guardar Turbidez ---
+                if (parametros.TryGetValue("Turbidez", out int idTurbidez))
                 {
                     mediciones.Add(new Medicion
                     {
                         sensor_id = idSensorEjemplo,
                         parametro_id = idTurbidez,
-                        escenario_id = idEscenarioEjemplo,
-                      valor_analogico = (double)lectura.TurbidezNTU, 
+                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
+                        valor_analogico = (double)lectura.TurbidezNTU,
                         status = (int)MapStatus(lectura.TurbidezStatus),
                         valor_cv_decimal = (decimal)lectura.TurbidezCV,
-                       fecha_hora= timestamp,
+                        fecha_hora = timestamp,
                         created_at = timestamp,
                         user_id = idUsuarioEjemplo,
-                        created_by= idUsuarioEjemplo
+                        created_by = idUsuarioEjemplo
                     });
                 }
-                else { Debug.WriteLine("Error de guardado: No se encontró el parámetro 'Turbidez' en la BD."); }
 
-                // Intenta guardar Temperatura
-                if (parametros.TryGetValue("Temperatura", out int idTemp)) // <-- REVISA ESTE NOMBRE
+                // --- Guardar Temperatura ---
+                if (parametros.TryGetValue("Temperatura", out int idTemp))
                 {
                     mediciones.Add(new Medicion
                     {
                         sensor_id = idSensorEjemplo,
                         parametro_id = idTemp,
-                        escenario_id = idEscenarioEjemplo,
+                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
                         valor_analogico = (double)lectura.TemperaturaC,
                         status = (int)StatusMedicion.Ideal,
                         valor_cv_decimal = (decimal)lectura.TemperaturaCV,
@@ -242,32 +205,30 @@ namespace MonitoreoMultifuente3.Services
                         created_by = idUsuarioEjemplo
                     });
                 }
-                else { Debug.WriteLine("Error de guardado: No se encontró el parámetro 'Temperatura' en la BD."); }
 
-                // Intenta guardar Conductividad
-                if (parametros.TryGetValue("Conductividad", out int idCond)) // <-- REVISA ESTE NOMBRE
+                // --- Guardar Conductividad ---
+                if (parametros.TryGetValue("Conductividad", out int idCond))
                 {
                     mediciones.Add(new Medicion
                     {
                         sensor_id = idSensorEjemplo,
                         parametro_id = idCond,
-                        escenario_id = idEscenarioEjemplo,
-                       valor_analogico = (double)lectura.ConductividadUsScm,
+                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
+                        valor_analogico = (double)lectura.ConductividadUsScm,
                         status = (int)StatusMedicion.Ideal,
                         valor_cv_decimal = (decimal)lectura.ConductividadCV,
-                       fecha_hora = timestamp,
+                        fecha_hora = timestamp,
                         created_at = timestamp,
                         user_id = idUsuarioEjemplo,
                         created_by = idUsuarioEjemplo
                     });
                 }
-                else { Debug.WriteLine("Error de guardado: No se encontró el parámetro 'Conductividad' en la BD."); }
 
                 if (mediciones.Any())
                 {
                     await dbContext.Mediciones.AddRangeAsync(mediciones);
                     await dbContext.SaveChangesAsync();
-                    Debug.WriteLine($"Guardadas {mediciones.Count} mediciones en la BD para el timestamp {timestamp}");
+                    Debug.WriteLine($"Guardadas {mediciones.Count} mediciones en Escenario {_currentEscenarioId}");
                 }
             }
         }
@@ -283,7 +244,6 @@ namespace MonitoreoMultifuente3.Services
             };
         }
 
-        // ... (StopListening y Dispose se quedan igual) ...
         public void StopListening()
         {
             try

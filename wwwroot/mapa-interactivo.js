@@ -1,30 +1,65 @@
-﻿let map;
-let marker;
+﻿var myMapInstance = null; // Usamos un nombre distinto para evitar conflictos globales
 
-// Esta función es llamada desde la página DatosMuestra.razor
 window.initMap = (dotNetHelper) => {
-    // Si el mapa ya existe, no hagas nada para evitar duplicados
-    if (map) return;
+    // 1. Verificar que la librería Leaflet (L) se haya cargado
+    if (typeof L === 'undefined') {
+        console.error("Leaflet no se cargó correctamente. Verifica tu conexión a internet o el enlace en index.html");
+        return;
+    }
 
-    // Coordenadas iniciales (Península de Yucatán)
-    map = L.map('map').setView([20.7, -88.9], 8);
+    // 2. Verificar que el contenedor del mapa exista en el HTML
+    var container = document.getElementById('map');
+    if (!container) {
+        console.error("No se encontró el div con id='map'");
+        return;
+    }
 
-    // Añade la capa de OpenStreetMap (el mapa visual)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-
-    // Evento que se dispara cuando el usuario hace clic en el mapa
-    map.on('click', function (e) {
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
-
-        if (marker) {
-            map.removeLayer(marker);
+    // 3. Limpieza agresiva: Si ya había un mapa, intentar borrarlo suavemente
+    if (myMapInstance) {
+        try {
+            myMapInstance.off(); // Desconectar eventos
+            myMapInstance.remove(); // Borrar mapa de Leaflet
+        } catch (e) {
+            console.warn("Error limpiando mapa anterior (es normal al cambiar de página):", e);
         }
-        marker = L.marker([lat, lng]).addTo(map);
+        myMapInstance = null;
+    }
 
-        // Llama a la función de C# en DatosMuestra.razor para enviarle las coordenadas
-        dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng);
-    });
+    // 4. Limpieza manual: Asegurar que el div esté vacío (elimina residuos viejos)
+    container.innerHTML = "";
+
+    try {
+        // 5. Crear el mapa nuevo
+        myMapInstance = L.map('map').setView([20.7, -88.9], 8);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(myMapInstance);
+
+        // 6. Manejo de Marcadores y Clics
+        var currentMarker = null;
+        myMapInstance.on('click', function (e) {
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
+
+            if (currentMarker) {
+                myMapInstance.removeLayer(currentMarker);
+            }
+            currentMarker = L.marker([lat, lng]).addTo(myMapInstance);
+
+            // Enviar coordenadas a C#
+            dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng);
+        });
+
+        // 7. TRUCO FINAL: Forzar redibujado después de un momento
+        // Esto arregla el "mapa gris" o "incompleto" que ocurre en Blazor al renderizar
+        setTimeout(function () {
+            myMapInstance.invalidateSize();
+        }, 300);
+
+    } catch (error) {
+        console.error("Error fatal al iniciar el mapa:", error);
+    }
+
 };

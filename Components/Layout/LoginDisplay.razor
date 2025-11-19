@@ -6,25 +6,24 @@
     <Authorized>
         <div class="d-flex align-items-center">
             <span class="text-light me-3">Hola, @context.User.Identity?.Name!</span>
-
             <button class="btn btn-sm btn-outline-light" @onclick="BeginSignOut">Cerrar Sesión</button>
         </div>
     </Authorized>
     <NotAuthorized>
-        <a class="btn btn-sm btn-primary" href="/login">Iniciar Sesión</a>
+        <a class="btn btn-sm btn-primary" href="login">Iniciar Sesión</a>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
     [Inject]
     private DesktopAuthenticationStateProvider AuthProvider { get; set; } = default!;
-    // Esta función se ejecuta cuando haces clic en el botón
+
     private void BeginSignOut()
     {
-        // --- CORRECCIÓN ---
-        // Se quitó 'await' porque SignOut() es 'void'
-        AuthProvider.SignOut();
+        // CAMBIO: El método se llama 'Logout' en tu proveedor
+        AuthProvider.Logout();
 
-        NavigationManager.NavigateTo("/", forceLoad: true); // Recarga la página
+        // Redirigir al inicio y forzar recarga para limpiar el estado visual
+        NavigationManager.NavigateTo("/", forceLoad: true);
     }
 }

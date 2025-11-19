@@ -25,6 +25,18 @@
       "PackagePath": "staticwebassets\\favicon.png"
     },
     {
+      "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\galeria\\imagen1.jpg",
+      "PackagePath": "staticwebassets\\images\\galeria\\imagen1.jpg"
+    },
+    {
+      "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\galeria\\imagen2.jpg",
+      "PackagePath": "staticwebassets\\images\\galeria\\imagen2.jpg"
+    },
+    {
+      "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\galeria\\imagen3.jpg",
+      "PackagePath": "staticwebassets\\images\\galeria\\imagen3.jpg"
+    },
+    {
       "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\icons\\Configuracion.png",
       "PackagePath": "staticwebassets\\images\\icons\\Configuracion.png"
     },
@@ -51,6 +63,18 @@
     {
       "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\icons\\Sensores.png",
       "PackagePath": "staticwebassets\\images\\icons\\Sensores.png"
+    },
+    {
+      "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\icons\\modoclaro.svg",
+      "PackagePath": "staticwebassets\\images\\icons\\modoclaro.svg"
+    },
+    {
+      "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\icons\\modooscuro.svg",
+      "PackagePath": "staticwebassets\\images\\icons\\modooscuro.svg"
+    },
+    {
+      "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\images\\icons\\modopredeterminado.svg",
+      "PackagePath": "staticwebassets\\images\\icons\\modopredeterminado.svg"
     },
     {
       "Id": "C:\\Users\\yesar\\source\\repos\\MonitoreoMultifuente3\\MonitoreoMultifuente3\\wwwroot\\index.html",

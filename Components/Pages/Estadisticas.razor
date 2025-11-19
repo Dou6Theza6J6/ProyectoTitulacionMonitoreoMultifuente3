@@ -5,6 +5,7 @@
 @using ChartJs.Blazor.LineChart
 @using ChartJs.Blazor.Common.Axes
 @using ChartJs.Blazor.Common.Enums
+@using ChartJs.Blazor.Common.Axes.Ticks
 @using Microsoft.EntityFrameworkCore
 @using MonitoreoMultifuente3.Data
 @using MonitoreoMultifuente3.Models
@@ -12,18 +13,10 @@
 @using OfficeOpenXml
 @using System.IO
 
-@* --- AQUÍ ESTÁ LA CORRECCIÓN --- *@
-@* Esto arregla los errores:
-    - 'LinearCartesianTicks' no se encontró
-    - 'LinearCartesianAxis' no contiene 'Id' (porque era un error en cascada)
-*@
-@using ChartJs.Blazor.Common.Axes.Ticks
-
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <h3>Estadísticas de Calidad del Agua</h3>
 
-@* (Tu HTML de filtros y botones se queda igual) *@
 <div class="row g-3 align-items-center mb-3">
     <div class="col-auto">
         <label for="fechaInicio" class="form-label">Fecha Inicio:</label>
@@ -36,7 +29,7 @@
     <div class="col-auto align-self-end">
         <button class="btn btn-primary" @onclick="CargarDatosGrafica">Filtrar</button>
     </div>
-    <div class="col-auto align-self-end">
+    <div class="col-auto align.self.end">
         <button class="btn btn-secondary" @onclick='() => AplicarFiltro("dia")'>Hoy</button>
         <button class="btn btn-secondary" @onclick='() => AplicarFiltro("semana")'>Semana</button>
         <button class="btn btn-secondary" @onclick='() => AplicarFiltro("mes")'>Mes</button>
@@ -60,22 +53,41 @@
     private DateTime? fechaInicio = DateTime.Today.AddDays(-7);
     private DateTime? fechaFin = DateTime.Today.AddDays(1).AddTicks(-1);
 
-    // 1. Configuración de la gráfica
+    // Configuración de la gráfica
     private LineConfig _lineChartConfig = new LineConfig
+    {
+        Options = new LineOptions
         {
-            Options = new LineOptions
+            Responsive = true,
+            Title = new OptionsTitle
             {
-                Responsive = true,
-                Title = new OptionsTitle { Display = true, Text = "Historial de Mediciones por Parámetro" },
-                Scales = new Scales
+                Display = true,
+                Text = "Historial de Mediciones por Parámetro"
+            },
+            Scales = new Scales
+            {
+                XAxes = new List<CartesianAxis>
                 {
-                    XAxes = new List<CartesianAxis> { new CategoryAxis { ScaleLabel = new ScaleLabel { Display = true, LabelString = "Tiempo" } } },
-                    YAxes = new List<CartesianAxis>() // Se llena dinámicamente
-                }
+                    new CategoryAxis
+                    {
+                        ScaleLabel = new ScaleLabel
+                        {
+                            Display = true,
+                            LabelString = "Tiempo"
+                        }
+                    }
+                },
+                YAxes = new List<CartesianAxis>() // Se llenará con un eje por parámetro
             }
-        };
+        }
+    };
 
-    // 2. Carga inicial
+    // Clase auxiliar para permitir que el eje tenga "id" en el JSON
+    public class LinearAxisConId : LinearCartesianAxis
+    {
+        public string Id { get; set; } = "";
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -87,6 +99,7 @@
     private async Task CargarDatosGrafica()
     {
         List<Medicion> medicionesGrafica;
+
         using (var dbContext = DbFactory.CreateDbContext())
         {
             var query = dbContext.Mediciones
@@ -96,29 +109,34 @@
 
             if (fechaInicio.HasValue)
                 query = query.Where(m => m.created_at >= fechaInicio.Value);
+
             if (fechaFin.HasValue)
                 query = query.Where(m => m.created_at <= fechaFin.Value);
 
-            medicionesGrafica = await query.OrderBy(m => m.created_at).ToListAsync();
+            medicionesGrafica = await query
+                .OrderBy(m => m.created_at)
+                .ToListAsync();
         }
 
+        // Limpiamos config actual
         _lineChartConfig.Data.Labels.Clear();
         _lineChartConfig.Data.Datasets.Clear();
         _lineChartConfig.Options.Scales.YAxes.Clear();
 
+        // Etiquetas del eje X (fechas)
         var todasLasEtiquetas = medicionesGrafica
-                                .Select(m => m.created_at.ToLocalTime().ToString("g"))
-                                .Distinct()
-                                .ToList();
+            .Select(m => m.created_at.ToLocalTime().ToString("g"))
+            .Distinct()
+            .ToList();
 
         foreach (var etiqueta in todasLasEtiquetas)
         {
             _lineChartConfig.Data.Labels.Add(etiqueta);
         }
 
-        // Agrupamos por el objeto Parametro completo
+        // Agrupamos por parámetro
         var grupos = medicionesGrafica
-            .Where(m => m.Parametro != null) // Arregla "Desreferencia NULL"
+            .Where(m => m.Parametro != null)
             .GroupBy(m => m.Parametro);
 
         int axisIndex = 0;
@@ -126,53 +144,67 @@
         foreach (var grupo in grupos)
         {
             var parametro = grupo.Key;
-            if (parametro == null) continue; // Doble chequeo
+            if (parametro == null)
+                continue;
 
+            // id único por parámetro, ej: "y-axis-1", "y-axis-2", etc.
             string yAxisId = $"y-axis-{parametro.parametro_id}";
 
-            var yAxis = new LinearCartesianAxis
+            // Creamos un eje Y para este parámetro
+            var yAxis = new LinearAxisConId
+            {
+                Id = yAxisId, // <- esto se serializa como "id": "y-axis-..."
+                Display = AxisDisplay.True,
+                Position = (axisIndex % 2 == 0) ? Position.Left : Position.Right,
+                ScaleLabel = new ScaleLabel
                 {
-                    //AxisId = yAxisId,
-                    Display = AxisDisplay.True,
-                    Position = (axisIndex % 2 == 0) ? Position.Left : Position.Right,
-                    ScaleLabel = new ScaleLabel
-                    {
-                        Display = true,
-                        LabelString = parametro.unidad_medida // Usamos tu modelo
-                    },
-                    Ticks = new LinearCartesianTicks // Ahora sí se encuentra esta clase
-                    {
-                        BeginAtZero = true
-                    }
-                };
+                    Display = true,
+                    LabelString = parametro.unidad_medida // ej: "pH", "NTU", "µS/cm"
+                },
+                Ticks = new LinearCartesianTicks
+                {
+                    BeginAtZero = true
+                }
+            };
 
             _lineChartConfig.Options.Scales.YAxes.Add(yAxis);
 
             var dataPoints = new List<double?>();
+
             foreach (var etiqueta in todasLasEtiquetas)
             {
                 var medicionParaEsteTiempo = grupo.FirstOrDefault(m =>
                     m.created_at.ToLocalTime().ToString("g") == etiqueta);
 
-               if (medicionParaEsteTiempo != null)
+                if (medicionParaEsteTiempo != null)
                 {
-                    var valor = (medicionParaEsteTiempo.Sensor?.tipo == 1) ? (double?)medicionParaEsteTiempo.valor_cv_decimal : medicionParaEsteTiempo.valor_analogico;
+                    double? valor = null;
+
+                    if (medicionParaEsteTiempo.Sensor?.tipo == 1)
+                    {
+                        valor = (double?)medicionParaEsteTiempo.valor_cv_decimal;
+                    }
+                    else
+                    {
+                        valor = medicionParaEsteTiempo.valor_analogico;
+                    }
+
                     dataPoints.Add(valor);
                 }
                 else
                 {
                     dataPoints.Add(null);
-                  }
+                }
             }
 
             var lineDataSet = new LineDataset<double?>(dataPoints)
-                {
-                    Label = parametro.nombre_parametro, // Usamos tu modelo
-                    BorderColor = ObtenerColorAleatorio(),
-                    Fill = false,
-                    LineTension = 0.1f,
-                    YAxisId = yAxisId
-                };
+            {
+                Label = parametro.nombre_parametro,
+                BorderColor = ObtenerColorAleatorio(),
+                Fill = false,
+                LineTension = 0.1f,
+                YAxisId = yAxisId // <- dataset usa el eje correspondiente
+            };
 
             _lineChartConfig.Data.Datasets.Add(lineDataSet);
             axisIndex++;
@@ -183,30 +215,33 @@
 
     private void AplicarFiltro(string rango)
     {
-        // (Este método se queda igual)
         var hoy = DateTime.Today;
+
         switch (rango)
         {
             case "dia":
                 fechaInicio = hoy;
                 fechaFin = hoy.AddDays(1).AddTicks(-1);
                 break;
+
             case "semana":
                 fechaInicio = hoy.AddDays(-(int)hoy.DayOfWeek);
                 fechaFin = fechaInicio.Value.AddDays(7).AddTicks(-1);
                 break;
+
             case "mes":
                 fechaInicio = new DateTime(hoy.Year, hoy.Month, 1);
                 fechaFin = fechaInicio.Value.AddMonths(1).AddTicks(-1);
                 break;
         }
+
         _ = CargarDatosGrafica();
     }
 
     private async Task ExportarAExcel()
     {
-        // (Este método se queda igual)
         List<Medicion> medicionesParaExportar;
+
         using (var dbContext = DbFactory.CreateDbContext())
         {
             var query = dbContext.Mediciones
@@ -216,10 +251,13 @@
 
             if (fechaInicio.HasValue)
                 query = query.Where(m => m.created_at >= fechaInicio.Value);
+
             if (fechaFin.HasValue)
                 query = query.Where(m => m.created_at <= fechaFin.Value);
 
-            medicionesParaExportar = await query.OrderBy(m => m.created_at).ToListAsync();
+            medicionesParaExportar = await query
+                .OrderBy(m => m.created_at)
+                .ToListAsync();
         }
 
         if (!medicionesParaExportar.Any())
@@ -235,6 +273,8 @@
         using (var package = new ExcelPackage(new FileInfo(rutaCompleta)))
         {
             var ws = package.Workbook.Worksheets.Add("Mediciones");
+
+            // Encabezados
             ws.Cells[1, 1].Value = "ID Medición";
             ws.Cells[1, 2].Value = "Sensor";
             ws.Cells[1, 3].Value = "Parámetro";
@@ -246,14 +286,27 @@
             {
                 var medicion = medicionesParaExportar[i];
                 int fila = i + 2;
+
                 ws.Cells[fila, 1].Value = medicion.registro_medicion_id;
                 ws.Cells[fila, 2].Value = medicion.Sensor?.nombre_sensor;
                 ws.Cells[fila, 3].Value = medicion.Parametro?.nombre_parametro;
-               var valor = (medicion.Sensor?.tipo == 1) ? (decimal?)medicion.valor_cv_decimal : (decimal?)medicion.valor_analogico;
+
+                decimal? valor = null;
+                if (medicion.Sensor?.tipo == 1)
+                {
+                    valor = medicion.valor_cv_decimal;
+                }
+                else
+                {
+                    valor = (decimal?)medicion.valor_analogico;
+                }
+
                 ws.Cells[fila, 4].Value = valor;
                 ws.Cells[fila, 4].Style.Numberformat.Format = "0.00";
+
                 ws.Cells[fila, 5].Value = medicion.created_at.ToLocalTime();
                 ws.Cells[fila, 5].Style.Numberformat.Format = "dd/MM/yyyy hh:mm AM/PM";
+
                 ws.Cells[fila, 6].Value = ((StatusMedicion)medicion.status).ToString();
             }
 

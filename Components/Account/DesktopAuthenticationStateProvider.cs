@@ -1,27 +1,20 @@
-﻿// MonitoreoMultifuente3/Components/Account/DesktopAuthenticationStateProvider.cs
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
 using MonitoreoMultifuente3.Data;
 using MonitoreoMultifuente3.Models;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Linq;
-using Microsoft.AspNetCore.Identity;
 
 namespace MonitoreoMultifuente3.Components.Account
 {
     public class DesktopAuthenticationStateProvider : AuthenticationStateProvider
     {
-        private readonly IServiceProvider _serviceProvider;
-        private ClaimsPrincipal _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-        private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
+        private readonly IServiceScopeFactory _scopeFactory;
+        private ClaimsPrincipal _currentUser = new(new ClaimsIdentity());
 
-        public DesktopAuthenticationStateProvider(IServiceProvider serviceProvider, IPasswordHasher<ApplicationUser> passwordHasher)
+        public DesktopAuthenticationStateProvider(IServiceScopeFactory scopeFactory)
         {
-            _serviceProvider = serviceProvider;
-            _passwordHasher = passwordHasher;
+            _scopeFactory = scopeFactory;
         }
 
         public override Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -29,44 +22,51 @@ namespace MonitoreoMultifuente3.Components.Account
             return Task.FromResult(new AuthenticationState(_currentUser));
         }
 
-        // --- CORRECCIÓN DE NOMBRE: 'LoginAsync' ahora es 'SignIn' ---
-        public async Task<bool> SignIn(string email, string password)
+        public async Task<bool> LoginAsync(string email, string password)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = _scopeFactory.CreateScope())
             {
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-                var user = await dbContext.Users
-                    .FirstOrDefaultAsync(u => u.Email == email);
+                // 1. Buscar usuario
+                var user = await userManager.FindByEmailAsync(email);
+                if (user == null) return false;
 
-                // --- CORRECCIÓN DE NULO: Añadimos 'user.PasswordHash != null' ---
-                if (user != null && user.PasswordHash != null)
+                // 2. Verificar contraseña
+                if (!await userManager.CheckPasswordAsync(user, password)) return false;
+
+                // 3. Obtener roles de la BD
+                var roles = await userManager.GetRolesAsync(user);
+
+                // 4. Crear la lista de datos (Claims)
+                var claims = new List<Claim>
                 {
-                    var passwordResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
+                    new Claim(ClaimTypes.Name, user.UserName ?? ""),
+                    new Claim(ClaimTypes.Email, user.Email ?? ""),
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+                };
 
-                    if (passwordResult == PasswordVerificationResult.Success)
-                    {
-                        var identity = new ClaimsIdentity(new[]
-                        {
-                            new Claim(ClaimTypes.Name, user.name_varChar ?? string.Empty),
-                            new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-                            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-                        }, "CustomAuth");
-
-                        _currentUser = new ClaimsPrincipal(identity);
-                        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
-                        return true;
-                    }
+                // TRUCO: Usamos una clave simple "app_role" para evitar confusiones
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim("app_role", role));
                 }
+
+                // 5. CONFIGURACIÓN CRÍTICA:
+                // Le decimos a la identidad: "El nombre está en ClaimTypes.Name y el ROL está en 'app_role'"
+                var identity = new ClaimsIdentity(claims, "CustomAuth", ClaimTypes.Name, "app_role");
+
+                _currentUser = new ClaimsPrincipal(identity);
+
+                NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+                return true;
             }
-            return false;
         }
 
-        // --- CORRECCIÓN DE NOMBRE: 'Logout' ahora es 'SignOut' ---
-        public void SignOut()
+        public void Logout()
         {
-            _currentUser = new ClaimsPrincipal(new ClaimsIdentity());
-            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
+            _currentUser = new(new ClaimsIdentity());
+            NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
         }
     }
 }

@@ -12,12 +12,12 @@
       <RelatedAsset></RelatedAsset>
       <AssetTraitName></AssetTraitName>
       <AssetTraitValue></AssetTraitValue>
-      <Fingerprint>n3xd0yvt3e</Fingerprint>
-      <Integrity>LR8hthObnHnrmYIfqLG1aCT5PYmpJqK3agqBG6xR89M=</Integrity>
+      <Fingerprint>dwigbiz31d</Fingerprint>
+      <Integrity>rSZk4jPW4Fk75DsLzFM6MyZg4r/YkREhE7hpv7v2s8I=</Integrity>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <FileLength>835</FileLength>
-      <LastWriteTime>Tue, 07 Oct 2025 07:33:05 GMT</LastWriteTime>
+      <FileLength>1220</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:29:35 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\app.css'))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\bootstrap\bootstrap.min.css'))">
@@ -99,6 +99,66 @@
       <FileLength>1148</FileLength>
       <LastWriteTime>Sun, 17 Aug 2025 15:24:06 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\favicon.png'))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\galeria\imagen1.jpg'))">
+      <SourceType>Package</SourceType>
+      <SourceId>MonitoreoMultifuente3</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>/</BasePath>
+      <RelativePath>images/galeria/imagen1.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <Fingerprint>dwb8mkrvg3</Fingerprint>
+      <Integrity>w/skFdztpHCHr+SpFLwynqW+aOgZKD1jKcIwIsDjImA=</Integrity>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <FileLength>126190</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 08:57:34 GMT</LastWriteTime>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\galeria\imagen1.jpg'))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\galeria\imagen2.jpg'))">
+      <SourceType>Package</SourceType>
+      <SourceId>MonitoreoMultifuente3</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>/</BasePath>
+      <RelativePath>images/galeria/imagen2.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <Fingerprint>e0mhkn6syj</Fingerprint>
+      <Integrity>rjk5Al3JQzkFHrVLteaWHFs8a03NQSvI7MM5uvRvf3c=</Integrity>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <FileLength>112699</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:00:40 GMT</LastWriteTime>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\galeria\imagen2.jpg'))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\galeria\imagen3.jpg'))">
+      <SourceType>Package</SourceType>
+      <SourceId>MonitoreoMultifuente3</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>/</BasePath>
+      <RelativePath>images/galeria/imagen3.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <Fingerprint>s3fgr8xr3y</Fingerprint>
+      <Integrity>iGS+wtq1rO6AB2Lfy/n6ps3tFNtjb5teM3741fzb3qw=</Integrity>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <FileLength>87965</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 08:58:56 GMT</LastWriteTime>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\galeria\imagen3.jpg'))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\Configuracion.png'))">
       <SourceType>Package</SourceType>
@@ -200,6 +260,66 @@
       <LastWriteTime>Mon, 22 Sep 2025 01:30:30 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\Login.png'))</OriginalItemSpec>
     </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\modoclaro.svg'))">
+      <SourceType>Package</SourceType>
+      <SourceId>MonitoreoMultifuente3</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>/</BasePath>
+      <RelativePath>images/icons/modoclaro.svg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <Fingerprint>qr1zzzczr5</Fingerprint>
+      <Integrity>tuK0EzrAiKsgmrep93OZhKQkj8sN5vZHxxoAnfG2J/U=</Integrity>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <FileLength>791</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:37:49 GMT</LastWriteTime>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\modoclaro.svg'))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\modooscuro.svg'))">
+      <SourceType>Package</SourceType>
+      <SourceId>MonitoreoMultifuente3</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>/</BasePath>
+      <RelativePath>images/icons/modooscuro.svg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <Fingerprint>1bmqjf1utz</Fingerprint>
+      <Integrity>k+2iB0IUWVXh7E2JSmk+mMbjWlxgKKVp6x8dNqcrcuk=</Integrity>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <FileLength>394</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:42:29 GMT</LastWriteTime>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\modooscuro.svg'))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\modopredeterminado.svg'))">
+      <SourceType>Package</SourceType>
+      <SourceId>MonitoreoMultifuente3</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>/</BasePath>
+      <RelativePath>images/icons/modopredeterminado.svg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <Fingerprint>9na6nvp6n5</Fingerprint>
+      <Integrity>Zd40cmLNiooehS569gCLEORfQXth2wDdVOUeX9E8zdU=</Integrity>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <FileLength>204</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:41:07 GMT</LastWriteTime>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\modopredeterminado.svg'))</OriginalItemSpec>
+    </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\images\icons\Monitoreo.png'))">
       <SourceType>Package</SourceType>
       <SourceId>MonitoreoMultifuente3</SourceId>
@@ -252,12 +372,12 @@
       <RelatedAsset></RelatedAsset>
       <AssetTraitName></AssetTraitName>
       <AssetTraitValue></AssetTraitValue>
-      <Fingerprint>t9yhe5g8ho</Fingerprint>
-      <Integrity>wcnMQSZWOk1eesyEO1ABV9me/994SC80qHZGIjtHqiQ=</Integrity>
+      <Fingerprint>uzk4qcbh8e</Fingerprint>
+      <Integrity>Sj2lvUukBcZHQYD0XaE0uctAMZ3l/pLSoDEP8/HroJ8=</Integrity>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <FileLength>1595</FileLength>
-      <LastWriteTime>Wed, 12 Nov 2025 07:29:27 GMT</LastWriteTime>
+      <FileLength>2133</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:46:06 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\index.html'))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\mapa-interactivo.js'))">
@@ -272,12 +392,12 @@
       <RelatedAsset></RelatedAsset>
       <AssetTraitName></AssetTraitName>
       <AssetTraitValue></AssetTraitValue>
-      <Fingerprint>bbdvuvbia8</Fingerprint>
-      <Integrity>Jz8hLlcb05hGKW3aCjh8RWdaQhwWSpV5blzHFcQnASg=</Integrity>
+      <Fingerprint>68page8dt4</Fingerprint>
+      <Integrity>ypk6bh8ygfLBNqH2PoAoMts13K78PFa3rSEqKZDJL38=</Integrity>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <FileLength>1069</FileLength>
-      <LastWriteTime>Tue, 07 Oct 2025 10:12:04 GMT</LastWriteTime>
+      <FileLength>2335</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 06:29:26 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\mapa-interactivo.js'))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\MonitoreoMultifuente3.styles.css'))">
@@ -297,7 +417,7 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <FileLength>4088</FileLength>
-      <LastWriteTime>Tue, 18 Nov 2025 23:08:16 GMT</LastWriteTime>
+      <LastWriteTime>Wed, 19 Nov 2025 07:28:30 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\MonitoreoMultifuente3.styles.css'))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\theme.js'))">
@@ -312,12 +432,12 @@
       <RelatedAsset></RelatedAsset>
       <AssetTraitName></AssetTraitName>
       <AssetTraitValue></AssetTraitValue>
-      <Fingerprint>o6qmz1xomo</Fingerprint>
-      <Integrity>8Bo3TpyB49uJs6QpQMTWpUR2hJhqEpbkK/E/GW7tYpU=</Integrity>
+      <Fingerprint>7dp2rooed7</Fingerprint>
+      <Integrity>60d/ZmGcC2QOOo5Sj7zfl98N2PY5xGrIRhLo4S9gz/k=</Integrity>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <FileLength>5</FileLength>
-      <LastWriteTime>Wed, 20 Aug 2025 17:19:33 GMT</LastWriteTime>
+      <FileLength>1161</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:20:24 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\theme.js'))</OriginalItemSpec>
     </StaticWebAsset>
   </ItemGroup>

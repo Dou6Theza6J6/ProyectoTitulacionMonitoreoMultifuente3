@@ -9,6 +9,29 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove=".vs\**" />
+	  <Compile Remove="bin\**" />
+	  <Compile Remove="obj\**" />
+	  <Compile Remove="Sensores\**" />
+	  <Content Remove=".vs\**" />
+	  <Content Remove="bin\**" />
+	  <Content Remove="obj\**" />
+	  <Content Remove="Sensores\**" />
+	  <EmbeddedResource Remove=".vs\**" />
+	  <EmbeddedResource Remove="bin\**" />
+	  <EmbeddedResource Remove="obj\**" />
+	  <EmbeddedResource Remove="Sensores\**" />
+	  <None Remove=".vs\**" />
+	  <None Remove="bin\**" />
+	  <None Remove="obj\**" />
+	  <None Remove="Sensores\**" />
+	  <Page Remove=".vs\**" />
+	  <Page Remove="bin\**" />
+	  <Page Remove="obj\**" />
+	  <Page Remove="Sensores\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 

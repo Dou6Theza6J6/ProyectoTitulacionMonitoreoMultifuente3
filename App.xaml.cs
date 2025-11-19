@@ -11,6 +11,7 @@ using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
+using System.Net.Http; // Necesario para HttpClient
 
 namespace MonitoreoMultifuente3
 {
@@ -30,40 +31,32 @@ namespace MonitoreoMultifuente3
         public App()
         {
             ExcelPackage.License.SetNonCommercialPersonal("ITSVA");
+
             AppHost = Host.CreateDefaultBuilder()
                 .ConfigureServices((hostContext, services) =>
                 {
-                    // Esta es la línea que YA TIENES
-                    /*services.AddDbContext<ApplicationDbContext>(options =>
+                    // 1. Configuración de la Base de Datos (Thread-Safe)
+                    services.AddDbContextFactory<ApplicationDbContext>(options =>
                     {
                         var connectionString = Configuration.GetConnectionString("DefaultConnection");
                         options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
                     });
-                    */
-                    // --- ESTA ES LA LÍNEA QUE FALTA ---
-                    // Agrega esta "fábrica" de DbContext. Esto es lo que soluciona
-                    // el error 'A second operation was started...' al ser "thread-safe".
-                    services.AddDbContextFactory<ApplicationDbContext>(options =>
-{
-    var connectionString = Configuration.GetConnectionString("DefaultConnection");
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
-});
-                    // --- FIN DE LA LÍNEA QUE FALTA ---
 
+                    // 2. Servicios esenciales de Blazor Hybrid
                     services.AddWpfBlazorWebView();
                     services.AddAuthorizationCore();
 
-                    // --- Registros de Autenticación Corregidos ---
+                    // --- ESTE ES EL SERVICIO QUE FALTABA ---
+                    services.AddHttpClient();
+                    // ---------------------------------------
+
+                    // 3. Autenticación y Usuarios
                     services.AddScoped<DesktopAuthenticationStateProvider>();
                     services.AddScoped<AuthenticationStateProvider>(sp =>
                         sp.GetRequiredService<DesktopAuthenticationStateProvider>());
                     services.AddScoped<IPasswordHasher<ApplicationUser>, PasswordHasher<ApplicationUser>>();
-                    // --- Fin de Registros de Auth ---
 
-                    services.AddSingleton<SensorDataService>();
-                    services.AddSignalR();
                     services.AddAuthentication();
-
                     services.AddIdentity<ApplicationUser, IdentityRole<int>>(options => {
                         options.Password.RequireDigit = false;
                         options.Password.RequiredLength = 4;
@@ -71,13 +64,20 @@ namespace MonitoreoMultifuente3
                         options.Password.RequireUppercase = false;
                         options.Password.RequireLowercase = false;
                     })
-                        .AddEntityFrameworkStores<ApplicationDbContext>()
-                        .AddSignInManager()
-                        .AddDefaultTokenProviders()
-                        .AddRoles<IdentityRole<int>>();
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddSignInManager()
+                    .AddDefaultTokenProviders()
+                    .AddRoles<IdentityRole<int>>();
 
+                    // 4. Tus Servicios Personalizados (Sensores)
+                    services.AddSingleton<SensorDataService>();   // Para leer del Arduino
+                    services.AddSingleton<SensorStatusService>(); // Para ver si están activos/inactivos
+
+                    // 5. Otros servicios
+                    services.AddSignalR();
+
+                    // 6. Registrar la ventana principal
                     services.AddSingleton<MainWindow>();
-                    services.AddSingleton<SensorStatusService>();
                 })
                 .Build();
         }
@@ -86,6 +86,14 @@ namespace MonitoreoMultifuente3
         {
             base.OnStartup(e);
             await AppHost!.StartAsync();
+
+            // Manejo de excepciones no controladas para que no se cierre la app de golpe
+            AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
+            {
+                var ex = (Exception)args.ExceptionObject;
+                MessageBox.Show($"Error crítico no controlado: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            };
+
             var mainWindow = AppHost.Services.GetRequiredService<MainWindow>();
             mainWindow.Show();
         }
