@@ -372,12 +372,12 @@
       <RelatedAsset></RelatedAsset>
       <AssetTraitName></AssetTraitName>
       <AssetTraitValue></AssetTraitValue>
-      <Fingerprint>uzk4qcbh8e</Fingerprint>
-      <Integrity>Sj2lvUukBcZHQYD0XaE0uctAMZ3l/pLSoDEP8/HroJ8=</Integrity>
+      <Fingerprint>h064yqj2ro</Fingerprint>
+      <Integrity>cbHU80EZku1W2wWGnRWcrnGNj6/vLOcNEi4+wq42wpA=</Integrity>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <FileLength>2133</FileLength>
-      <LastWriteTime>Wed, 19 Nov 2025 09:46:06 GMT</LastWriteTime>
+      <FileLength>1966</FileLength>
+      <LastWriteTime>Wed, 19 Nov 2025 09:53:13 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\index.html'))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\mapa-interactivo.js'))">

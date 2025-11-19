@@ -86,20 +86,21 @@
                 <div class="nav-item px-3 my-2">
                     <div class="d-flex justify-content-around bg-dark bg-opacity-50 rounded p-2 border border-secondary align-items-center">
 
-                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "light" ? "bg-white bg-opacity-25 rounded shadow-sm" : "opacity-50")"
+                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "light" ? "text-warning bg-white bg-opacity-10 rounded" : "text-secondary")"
                                 @onclick='() => CambiarTema("light")' title="Modo Claro">
-                            <img src="images/modoclaro.svg" alt="Claro" style="width: 22px; height: 22px;" />
+                            <i class="bi bi-brightness-high-fill fs-5"></i>
                         </button>
 
-                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "dark" ? "bg-white bg-opacity-25 rounded shadow-sm" : "opacity-50")"
+                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "dark" ? "text-info bg-white bg-opacity-10 rounded" : "text-secondary")"
                                 @onclick='() => CambiarTema("dark")' title="Modo Oscuro">
-                            <img src="images/modooscuro.svg" alt="Oscuro" style="width: 22px; height: 22px;" />
+                            <i class="bi bi-moon-fill fs-5"></i>
                         </button>
 
-                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "auto" ? "bg-white bg-opacity-25 rounded shadow-sm" : "opacity-50")"
-                                @onclick='() => CambiarTema("auto")' title="Predeterminado del Sistema">
-                            <img src="images/modopredeterminado.svg" alt="Auto" style="width: 22px; height: 22px;" />
+                        <button class="btn btn-sm p-1 border-0 @(currentTheme == "auto" ? "text-white bg-white bg-opacity-10 rounded" : "text-secondary")"
+                                @onclick='() => CambiarTema("auto")' title="Predeterminado">
+                            <i class="bi bi-circle-half fs-5"></i>
                         </button>
+
                     </div>
                 </div>
                 <div class="nav-item px-3 pb-3">
@@ -134,7 +135,6 @@
     {
         if (firstRender)
         {
-            // Recuperar tema guardado para iluminar el botón correcto
             currentTheme = await JSRuntime.InvokeAsync<string>("ThemeManager.getSavedTheme");
             StateHasChanged();
         }

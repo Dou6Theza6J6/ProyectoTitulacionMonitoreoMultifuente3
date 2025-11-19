@@ -16,6 +16,6 @@ wwwroot\images\icons\modooscuro.svg
 wwwroot\images\icons\modopredeterminado.svg
 wwwroot\images\icons\Monitoreo.png
 wwwroot\images\icons\Sensores.png
-wwwroot\index.html
 wwwroot\mapa-interactivo.js
 wwwroot\theme.js
+wwwroot\index.html
