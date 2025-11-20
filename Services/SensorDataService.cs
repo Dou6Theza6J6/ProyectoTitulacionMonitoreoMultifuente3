@@ -20,8 +20,9 @@ namespace MonitoreoMultifuente3.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private string _jsonBuffer = string.Empty;
 
-        // --- NUEVO: Variable para guardar el Escenario seleccionado en la UI ---
+        // --- Variables de Configuración (Seleccionadas en la UI) ---
         private int _currentEscenarioId = 0;
+        private int _currentSensorId = 0; // <--- NUEVO: ID del sensor físico seleccionado
 
         public event Action<LecturaArduinoDto>? OnDataReceived;
 
@@ -30,11 +31,18 @@ namespace MonitoreoMultifuente3.Services
             _scopeFactory = scopeFactory;
         }
 
-        // --- NUEVO: Método para recibir el ID desde la página Monitoreo.razor ---
+        // Método para recibir el Escenario desde Monitoreo.razor
         public void SetCurrentEscenario(int escenarioId)
         {
             _currentEscenarioId = escenarioId;
-            Debug.WriteLine($"Servicio configurado para Escenario ID: {_currentEscenarioId}");
+            Debug.WriteLine($"[SensorService] Escenario ID: {_currentEscenarioId}");
+        }
+
+        // --- NUEVO MÉTODO: Configurar Sensor Físico ---
+        public void SetCurrentSensor(int sensorId)
+        {
+            _currentSensorId = sensorId;
+            Debug.WriteLine($"[SensorService] Sensor ID: {_currentSensorId}");
         }
 
         public string[] GetAvailablePorts()
@@ -48,10 +56,7 @@ namespace MonitoreoMultifuente3.Services
             {
                 if (_serialPort != null)
                 {
-                    if (_serialPort.IsOpen)
-                    {
-                        _serialPort.Close();
-                    }
+                    if (_serialPort.IsOpen) _serialPort.Close();
                     _serialPort.DataReceived -= SerialPort_DataReceived;
                     _serialPort.Dispose();
                 }
@@ -82,19 +87,13 @@ namespace MonitoreoMultifuente3.Services
                     ProcessJsonLine(line);
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error reading serial data: {ex.Message}");
-            }
+            catch (Exception ex) { Debug.WriteLine(ex.Message); }
         }
 
         private string? ReadLineFromBuffer()
         {
             int newlineIndex = _jsonBuffer.IndexOf('\n');
-            if (newlineIndex == -1)
-            {
-                return null;
-            }
+            if (newlineIndex == -1) return null;
 
             string line = _jsonBuffer.Substring(0, newlineIndex).Trim();
             _jsonBuffer = _jsonBuffer.Substring(newlineIndex + 1);
@@ -103,15 +102,10 @@ namespace MonitoreoMultifuente3.Services
 
         private void ProcessJsonLine(string jsonString)
         {
-            if (string.IsNullOrWhiteSpace(jsonString) || !jsonString.StartsWith("{") || !jsonString.EndsWith("}"))
-            {
-                Debug.WriteLine($"Data skipped (not JSON): {jsonString}");
-                return;
-            }
+            if (string.IsNullOrWhiteSpace(jsonString) || !jsonString.StartsWith("{")) return;
 
             try
             {
-                Debug.WriteLine($"Data Received: {jsonString}");
                 LecturaArduinoDto? lectura = JsonSerializer.Deserialize<LecturaArduinoDto>(jsonString);
 
                 if (lectura != null)
@@ -119,116 +113,73 @@ namespace MonitoreoMultifuente3.Services
                     // 1. Notificar a la UI
                     OnDataReceived?.Invoke(lectura);
 
-                    // 2. Guardar en la DB Local (MySQL)
-                    Task.Run(() => SaveDataToDatabase(lectura));
+                    // 2. Guardar en BD (Solo si tenemos Escenario Y Sensor seleccionados)
+                    if (_currentEscenarioId > 0 && _currentSensorId > 0)
+                    {
+                        Task.Run(() => SaveDataToDatabase(lectura));
+                    }
                 }
             }
-            catch (JsonException ex)
-            {
-                Debug.WriteLine($"Error parsing JSON: {ex.Message} | JSON: {jsonString}");
-            }
+            catch (JsonException ex) { Debug.WriteLine($"Error JSON: {ex.Message}"); }
         }
 
         private async Task SaveDataToDatabase(LecturaArduinoDto lectura)
         {
-            // Validar que se haya seleccionado un escenario
-            if (_currentEscenarioId == 0)
-            {
-                Debug.WriteLine("ADVERTENCIA: No se guardaron datos porque no hay un escenario seleccionado.");
-                return;
-            }
-
             using (var scope = _scopeFactory.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                // Carga los parámetros (Asegúrate que los nombres coinciden con tu DB)
-                var parametros = await dbContext.Parametros
+                // --- CLAVE: Buscar parámetros que pertenezcan al sensor seleccionado ---
+                var paramsDict = await dbContext.Parametros
+                    .Where(p => p.sensor_id == _currentSensorId)
                     .ToDictionaryAsync(p => p.nombre_parametro, p => p.parametro_id);
 
-                var timestamp = DateTime.UtcNow; // Recomendado usar UTC
-                int idSensorEjemplo = 1; // Esto podrías hacerlo dinámico también si tienes múltiples sensores físicos
-                int idUsuarioEjemplo = 1; // O el ID del usuario logueado si tienes autenticación
+                if (!paramsDict.Any())
+                {
+                    Debug.WriteLine($"[Advertencia] El Sensor ID {_currentSensorId} no tiene parámetros configurados en la BD.");
+                    return;
+                }
 
+                var timestamp = DateTime.UtcNow;
+                int idUsuarioEjemplo = 1;
                 var mediciones = new List<Medicion>();
 
-                // --- Guardar pH ---
-                if (parametros.TryGetValue("pH", out int idPH))
+                // Función local para mapear datos
+                void AgregarMedicion(string nombreParametro, float valor, float cv, string? status)
                 {
-                    mediciones.Add(new Medicion
+                    // Buscar ID del parámetro (ignora mayúsculas/minúsculas)
+                    var key = paramsDict.Keys.FirstOrDefault(k => k.Equals(nombreParametro, StringComparison.OrdinalIgnoreCase));
+
+                    if (key != null)
                     {
-                        sensor_id = idSensorEjemplo,
-                        parametro_id = idPH,
-                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
-                        valor_analogico = (double)lectura.PH,
-                        status = (int)MapStatus(lectura.PhStatus),
-                        valor_cv_decimal = (decimal)lectura.PhCV,
-                        fecha_hora = timestamp,
-                        created_at = timestamp,
-                        user_id = idUsuarioEjemplo,
-                        created_by = idUsuarioEjemplo
-                    });
+                        mediciones.Add(new Medicion
+                        {
+                            escenario_id = _currentEscenarioId,
+                            sensor_id = _currentSensorId,       // <--- ID del Sensor REAL
+                            parametro_id = paramsDict[key],     // <--- ID del Parámetro REAL
+                            valor_analogico = (double)valor,
+                            valor_cv_decimal = (decimal)cv,
+                            status = (int)MapStatus(status),
+                            fecha_hora = timestamp,
+                            created_at = timestamp,
+                            updated_at = timestamp,
+                            user_id = idUsuarioEjemplo,
+                            created_by = idUsuarioEjemplo
+                        });
+                    }
                 }
 
-                // --- Guardar Turbidez ---
-                if (parametros.TryGetValue("Turbidez", out int idTurbidez))
-                {
-                    mediciones.Add(new Medicion
-                    {
-                        sensor_id = idSensorEjemplo,
-                        parametro_id = idTurbidez,
-                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
-                        valor_analogico = (double)lectura.TurbidezNTU,
-                        status = (int)MapStatus(lectura.TurbidezStatus),
-                        valor_cv_decimal = (decimal)lectura.TurbidezCV,
-                        fecha_hora = timestamp,
-                        created_at = timestamp,
-                        user_id = idUsuarioEjemplo,
-                        created_by = idUsuarioEjemplo
-                    });
-                }
-
-                // --- Guardar Temperatura ---
-                if (parametros.TryGetValue("Temperatura", out int idTemp))
-                {
-                    mediciones.Add(new Medicion
-                    {
-                        sensor_id = idSensorEjemplo,
-                        parametro_id = idTemp,
-                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
-                        valor_analogico = (double)lectura.TemperaturaC,
-                        status = (int)StatusMedicion.Ideal,
-                        valor_cv_decimal = (decimal)lectura.TemperaturaCV,
-                        fecha_hora = timestamp,
-                        created_at = timestamp,
-                        user_id = idUsuarioEjemplo,
-                        created_by = idUsuarioEjemplo
-                    });
-                }
-
-                // --- Guardar Conductividad ---
-                if (parametros.TryGetValue("Conductividad", out int idCond))
-                {
-                    mediciones.Add(new Medicion
-                    {
-                        sensor_id = idSensorEjemplo,
-                        parametro_id = idCond,
-                        escenario_id = _currentEscenarioId, // USANDO LA VARIABLE DINÁMICA
-                        valor_analogico = (double)lectura.ConductividadUsScm,
-                        status = (int)StatusMedicion.Ideal,
-                        valor_cv_decimal = (decimal)lectura.ConductividadCV,
-                        fecha_hora = timestamp,
-                        created_at = timestamp,
-                        user_id = idUsuarioEjemplo,
-                        created_by = idUsuarioEjemplo
-                    });
-                }
+                // Mapeo exacto a tu JSON
+                AgregarMedicion("pH", lectura.PH, lectura.PhCV, lectura.PhStatus);
+                AgregarMedicion("Turbidez", lectura.TurbidezNTU, lectura.TurbidezCV, lectura.TurbidezStatus);
+                AgregarMedicion("Temperatura", lectura.TemperaturaC, lectura.TemperaturaCV, "ideal");
+                AgregarMedicion("Conductividad", lectura.ConductividadUsScm, lectura.ConductividadCV, "ideal");
 
                 if (mediciones.Any())
                 {
                     await dbContext.Mediciones.AddRangeAsync(mediciones);
                     await dbContext.SaveChangesAsync();
-                    Debug.WriteLine($"Guardadas {mediciones.Count} mediciones en Escenario {_currentEscenarioId}");
+                    Debug.WriteLine($"[DB] Guardadas {mediciones.Count} mediciones.");
                 }
             }
         }
@@ -239,8 +190,11 @@ namespace MonitoreoMultifuente3.Services
             {
                 "ideal" => StatusMedicion.Ideal,
                 "apta" => StatusMedicion.Apta,
+                "cumple" => StatusMedicion.Apta,
                 "no apta" => StatusMedicion.NoApta,
-                _ => StatusMedicion.NoApta
+                "no_apto" => StatusMedicion.NoApta,
+                "fuera_norma" => StatusMedicion.NoApta,
+                _ => StatusMedicion.Ideal
             };
         }
 
@@ -250,25 +204,15 @@ namespace MonitoreoMultifuente3.Services
             {
                 if (_serialPort != null)
                 {
-                    if (_serialPort.IsOpen)
-                    {
-                        _serialPort.Close();
-                    }
+                    if (_serialPort.IsOpen) _serialPort.Close();
                     _serialPort.DataReceived -= SerialPort_DataReceived;
                     _serialPort.Dispose();
                     _serialPort = null;
-                    Debug.WriteLine("Serial port stopped and disposed.");
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error stopping serial port: {ex.Message}");
-            }
+            catch { }
         }
 
-        public void Dispose()
-        {
-            StopListening();
-        }
+        public void Dispose() => StopListening();
     }
 }

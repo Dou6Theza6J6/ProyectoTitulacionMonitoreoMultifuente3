@@ -8,17 +8,13 @@
 @inject SensorDataService SensorService
 @implements IDisposable
 
-<PageTitle>
-    @(SensorId == 0 ? "Monitoreo General" : $"Monitoreo: {nombreSensorActual}")
-</PageTitle>
+<PageTitle>@(SensorId == 0 ? "Monitoreo General" : $"Monitoreo: {nombreSensorActual}")</PageTitle>
 
 <div class="container-fluid">
 
     <div class="card mb-4 shadow-sm">
         <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">
-                📡 Configuración @(SensorId > 0 ? $"- {nombreSensorActual}" : "")
-            </h5>
+            <h5 class="mb-0">📡 Configuración @(SensorId > 0 ? $"- {nombreSensorActual}" : "")</h5>
         </div>
         <div class="card-body">
             <div class="row align-items-end">
@@ -28,7 +24,7 @@
                         <option value="0">-- Seleccione Ubicación --</option>
                         @foreach (var esc in escenariosDisponibles)
                         {
-                            <option value="@esc.escenario_id">@esc.descripcion (@esc.Ubicacion?.nombre)</option>
+                            <option value="@esc.escenario_id">@esc.nombre (@esc.Ubicacion?.nombre)</option>
                         }
                     </select>
                     @if (selectedEscenarioId > 0)
@@ -74,7 +70,6 @@
                     }
                 </div>
             </div>
-
             @if (!string.IsNullOrEmpty(errorMessage))
             {
                 <div class="alert alert-danger mt-2 mb-0 p-2">@errorMessage</div>
@@ -83,7 +78,6 @@
     </div>
 
     <div class="row">
-
         <div class="col-lg-4 mb-4">
             <div class="card shadow h-100 border-success">
                 <div class="card-header bg-success text-white d-flex justify-content-between">
@@ -94,8 +88,6 @@
                     @if (latestData != null)
                     {
                         <ul class="list-group list-group-flush">
-
-                            @* --- SOLO SE MUESTRA SI ES SENSOR DE pH O GENERAL --- *@
                             @if (verPH)
                             {
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -109,8 +101,6 @@
                                     </div>
                                 </li>
                             }
-
-                            @* --- SOLO SE MUESTRA SI ES SENSOR DE TURBIDEZ O GENERAL --- *@
                             @if (verTurbidez)
                             {
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -124,15 +114,9 @@
                                     </div>
                                 </li>
                             }
-
-                            @* --- TEMPERATURA Y CONDUCTIVIDAD (Siempre visibles como referencia) --- *@
                             <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
                                 <span class="h6 mb-0">Temp:</span>
                                 <span class="h5 mb-0">@latestData.TemperaturaC.ToString("F1") °C</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
-                                <span class="h6 mb-0">Cond:</span>
-                                <span class="h5 mb-0">@latestData.ConductividadUsScm.ToString("F0") µS</span>
                             </li>
                         </ul>
                     }
@@ -140,7 +124,6 @@
                     {
                         <div class="text-center py-5 text-muted">
                             <p>Esperando datos...</p>
-                            <small>Conecte el dispositivo para ver valores.</small>
                         </div>
                     }
                 </div>
@@ -150,8 +133,8 @@
         <div class="col-lg-8 mb-4">
             <div class="card shadow h-100">
                 <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">📅 Historial (@(SensorId == 0 ? "Todo" : nombreSensorActual))</h5>
-                    <button class="btn btn-sm btn-light text-dark" @onclick="CargarHistorial">🔄 Actualizar Tabla</button>
+                    <h5 class="mb-0">📅 Historial</h5>
+                    <button class="btn btn-sm btn-light text-dark" @onclick="CargarHistorial">🔄 Actualizar</button>
                 </div>
                 <div class="card-body p-0 table-responsive" style="max-height: 500px; overflow-y: auto;">
                     @if (historialMediciones.Any())
@@ -162,8 +145,8 @@
                                     <th>Hora</th>
                                     <th>Parámetro</th>
                                     <th>Valor</th>
-                                    <th>Estado</th>
-                                    <th>CV (%)</th>
+                                    <th>Calidad Agua</th>
+                                    <th>Estado Sensor (CV)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -172,9 +155,7 @@
                                     <tr>
                                         <td>@item.fecha_hora.ToLocalTime().ToString("HH:mm:ss")</td>
                                         <td class="fw-bold text-primary">@item.Parametro?.nombre_parametro</td>
-
                                         <td class="fs-5">@item.valor_analogico.ToString("F2")</td>
-
                                         <td>
                                             @{
                                                 var estadoEnum = (MonitoreoMultifuente3.Enums.StatusMedicion)item.status;
@@ -182,7 +163,35 @@
                                             <span class="badge bg-@GetColorStatus(estadoEnum.ToString())">@estadoEnum</span>
                                         </td>
 
-                                        <td>@((item.valor_cv_decimal ?? 0).ToString("F2"))%</td>
+                                        <td>
+                                            @{
+                                                decimal cv = item.valor_cv_decimal ?? 0;
+                                                string cvClase = "secondary";
+                                                string cvTexto = "Desc.";
+
+                                                if (cv == 0)
+                                                {
+                                                    cvTexto = "Inactivo (0)";
+                                                    cvClase = "secondary";
+                                                }
+                                                else if (cv >= 0.01m && cv <= 0.15m)
+                                                {
+                                                    cvTexto = "Activo ✔";
+                                                    cvClase = "success";
+                                                }
+                                                else if (cv >= 0.50m)
+                                                {
+                                                    cvTexto = "ERROR ⚠";
+                                                    cvClase = "danger";
+                                                }
+                                                else
+                                                {
+                                                    cvTexto = "Revisar";
+                                                    cvClase = "warning text-dark";
+                                                }
+                                            }
+                                            <span class="badge bg-@cvClase">@cvTexto (@cv.ToString("F2"))</span>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -193,37 +202,34 @@
                         <div class="p-5 text-center text-muted">
                             @if (selectedEscenarioId == 0)
                             {
-                                <span>Seleccione un escenario arriba para cargar datos.</span>
+                                <span>Seleccione un escenario.</span>
                             }
                             else
                             {
-                                <span>No hay registros guardados con este filtro.</span>
+
+                                <span>No hay registros.</span>
                             }
                         </div>
                     }
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
 @code {
     [Parameter] public int SensorId { get; set; } = 0;
 
-    // --- Variables Visuales (Filtros) ---
     private string nombreSensorActual = "General";
     private bool verPH = true;
     private bool verTurbidez = true;
 
-    // --- Variables Datos ---
     private List<Escenario> escenariosDisponibles = new();
     private List<Medicion> historialMediciones = new();
     private LecturaArduinoDto? latestData;
     private DateTime ultimoUpdate = DateTime.Now;
     private string nombreEscenarioActual = "Ninguno";
 
-    // --- Variables Conexión ---
     private string[] availablePorts = Array.Empty<string>();
     private string selectedPort = "";
     private int selectedEscenarioId = 0;
@@ -235,6 +241,7 @@
         using var context = DbFactory.CreateDbContext();
         escenariosDisponibles = await context.Escenarios
             .Include(e => e.Ubicacion)
+            .Where(e => e.nombre != "All") // Filtro para no mostrar el escenario 'basura' si existe
             .OrderByDescending(e => e.created_at)
             .ToListAsync();
 
@@ -246,52 +253,27 @@
         SensorService.OnDataReceived += HandleDataReceived;
     }
 
-    // --- LÓGICA INTELIGENTE PARA DETECTAR EL SENSOR ---
     protected override async Task OnParametersSetAsync()
     {
         if (SensorId > 0)
         {
             using var context = DbFactory.CreateDbContext();
-            var sensor = await context.Sensores
-                                      .Include(s => s.Parametros)
-                                      .FirstOrDefaultAsync(s => s.sensor_id == SensorId);
-
+            var sensor = await context.Sensores.Include(s => s.Parametros).FirstOrDefaultAsync(s => s.sensor_id == SensorId);
             if (sensor != null)
             {
-                nombreSensorActual = sensor.nombre_sensor ?? "Sensor Desconocido";
+                nombreSensorActual = sensor.nombre_sensor ?? "Desconocido";
                 var nombreLower = nombreSensorActual.ToLower();
+                bool esPh = nombreLower.Contains("ph");
+                bool esTurb = nombreLower.Contains("turbidez");
 
-                // Lógica: Si el nombre dice "ph", mostramos solo pH. Si dice "turbidez", solo turbidez.
-                bool esSensorSoloPH = nombreLower.Contains("ph") && !nombreLower.Contains("turbidez") && !nombreLower.Contains("multi");
-                bool esSensorSoloTurb = nombreLower.Contains("turbidez") && !nombreLower.Contains("ph") && !nombreLower.Contains("multi");
-
-                if (esSensorSoloPH)
-                {
-                    verPH = true;
-                    verTurbidez = false;
-                }
-                else if (esSensorSoloTurb)
-                {
-                    verPH = false;
-                    verTurbidez = true;
-                }
-                else
-                {
-                    // Si es genérico, miramos los parámetros de la BD
-                    verPH = sensor.Parametros.Any(p => p.nombre_parametro != null && p.nombre_parametro.ToLower().Contains("ph"));
-                    verTurbidez = sensor.Parametros.Any(p => p.nombre_parametro != null && p.nombre_parametro.ToLower().Contains("turbidez"));
-                }
+                verPH = esPh || (!esPh && !esTurb);
+                verTurbidez = esTurb || (!esPh && !esTurb);
             }
         }
         else
         {
-            // Vista General (Sin ID) -> Mostramos Todo
-            nombreSensorActual = "Vista General";
-            verPH = true;
-            verTurbidez = true;
+            verPH = true; verTurbidez = true;
         }
-
-        // Si ya hay escenario seleccionado, recargamos la tabla con los nuevos filtros
         if (selectedEscenarioId > 0) await CargarHistorial();
     }
 
@@ -301,61 +283,33 @@
         {
             selectedEscenarioId = id;
             var escenario = escenariosDisponibles.FirstOrDefault(x => x.escenario_id == id);
-            nombreEscenarioActual = escenario?.descripcion ?? "Desconocido";
+            nombreEscenarioActual = escenario?.nombre ?? "Desconocido"; // Usar nombre corto
 
             SensorService.SetCurrentEscenario(selectedEscenarioId);
             await CargarHistorial();
         }
     }
 
-    // --- FILTRADO DE TABLA ESTRICTO ---
     private async Task CargarHistorial()
     {
         if (selectedEscenarioId == 0) return;
-
         using var context = DbFactory.CreateDbContext();
 
-        // 1. Filtro base: Escenario seleccionado
         var query = context.Mediciones
             .Include(m => m.Parametro)
             .Where(m => m.escenario_id == selectedEscenarioId);
 
-        // 2. Filtro por ID de Sensor (si estamos en una vista específica)
-        if (SensorId > 0)
-        {
-            query = query.Where(m => m.sensor_id == SensorId);
+        if (SensorId > 0) query = query.Where(m => m.sensor_id == SensorId);
 
-            // 3. FILTRO EXTRA DE LIMPIEZA:
-            // Si la vista es SOLO de pH, excluimos cualquier registro que diga "Turbidez"
-            // Esto limpia la tabla si tus datos históricos están mezclados.
-            if (verPH && !verTurbidez)
-            {
-                query = query.Where(m => m.Parametro.nombre_parametro.Contains("pH"));
-            }
-            else if (!verPH && verTurbidez)
-            {
-                query = query.Where(m => m.Parametro.nombre_parametro.Contains("Turbidez"));
-            }
-        }
-
-        historialMediciones = await query
-            .OrderByDescending(m => m.fecha_hora)
-            .Take(50)
-            .ToListAsync();
-
+        historialMediciones = await query.OrderByDescending(m => m.fecha_hora).Take(50).ToListAsync();
         await InvokeAsync(StateHasChanged);
     }
 
     private void StartListening()
     {
-        if (selectedEscenarioId == 0)
-        {
-            errorMessage = "⚠ Seleccione un escenario primero.";
-            return;
-        }
+        if (selectedEscenarioId == 0) { errorMessage = "⚠ Seleccione un escenario primero."; return; }
         errorMessage = null;
         SensorService.SetCurrentEscenario(selectedEscenarioId);
-
         if (SensorService.StartListening(selectedPort)) isListening = true;
         else errorMessage = $"Error al abrir {selectedPort}";
     }
@@ -364,7 +318,6 @@
     {
         isListening = false;
         SensorService.StopListening();
-        latestData = null;
         StateHasChanged();
     }
 
@@ -372,25 +325,14 @@
     {
         latestData = lectura;
         ultimoUpdate = DateTime.Now;
-        // Retardo pequeño para dar tiempo a la BD a guardar antes de leer
-        _ = InvokeAsync(async () =>
-        {
-            await Task.Delay(200);
-            await CargarHistorial();
-        });
+        _ = InvokeAsync(async () => { await Task.Delay(200); await CargarHistorial(); });
         InvokeAsync(StateHasChanged);
     }
 
     private string GetColorStatus(string? status)
     {
         if (string.IsNullOrEmpty(status)) return "secondary";
-        return status.ToLower() switch
-        {
-            "ideal" => "success",
-            "apta" => "warning",
-            "no apta" => "danger",
-            _ => "secondary"
-        };
+        return status.ToLower() switch { "ideal" => "success", "apta" => "warning", "no apta" => "danger", _ => "secondary" };
     }
 
     public void Dispose()

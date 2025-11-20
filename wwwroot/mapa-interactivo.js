@@ -37,23 +37,59 @@ window.initMap = (dotNetHelper) => {
             maxZoom: 19
         }).addTo(myMapInstance);
 
-        // 6. Manejo de Marcadores y Clics
+        // Variable para el marcador actual
         var currentMarker = null;
-        myMapInstance.on('click', function (e) {
-            var lat = e.latlng.lat;
-            var lng = e.latlng.lng;
 
+        // --- FUNCIÓN AUXILIAR: Mover marcador y avisar a Blazor ---
+        // Esta función se usa tanto para los Clics como para el Buscador
+        function actualizarMarcador(lat, lng) {
+            // Si ya existe marcador, lo borramos
             if (currentMarker) {
                 myMapInstance.removeLayer(currentMarker);
             }
+            // Ponemos el nuevo
             currentMarker = L.marker([lat, lng]).addTo(myMapInstance);
 
-            // Enviar coordenadas a C#
-            dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng);
+            // Enviar coordenadas a C# (Formulario)
+            // Usamos try-catch por si el componente de Blazor ya no existe
+            try {
+                dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng);
+            } catch (err) {
+                console.warn("No se pudo enviar coordenadas a Blazor:", err);
+            }
+        }
+
+        // 6. --- INTEGRACIÓN DEL BUSCADOR (GEOCODER) ---
+        // Verificamos si el plugin está cargado (por si acaso falló en index.html)
+        if (L.Control.Geocoder) {
+            var geocoder = L.Control.Geocoder.nominatim();
+
+            L.Control.geocoder({
+                geocoder: geocoder,
+                defaultMarkGeocode: false, // Desactivamos el marcador por defecto del plugin para usar el nuestro
+                placeholder: "Buscar ciudad o dirección...",
+                errorMessage: "No encontrado"
+            })
+                .on('markgeocode', function (e) {
+                    var result = e.geocode;
+
+                    // 1. Centrar el mapa en el resultado encontrado
+                    myMapInstance.fitBounds(result.bbox);
+
+                    // 2. Usar nuestra función para poner el marcador y llenar el formulario
+                    actualizarMarcador(result.center.lat, result.center.lng);
+                })
+                .addTo(myMapInstance);
+        } else {
+            console.warn("El plugin Leaflet-Control-Geocoder no está cargado. Revisa tu index.html.");
+        }
+
+        // 7. Manejo de Clics en el mapa (Manual)
+        myMapInstance.on('click', function (e) {
+            actualizarMarcador(e.latlng.lat, e.latlng.lng);
         });
 
-        // 7. TRUCO FINAL: Forzar redibujado después de un momento
-        // Esto arregla el "mapa gris" o "incompleto" que ocurre en Blazor al renderizar
+        // 8. TRUCO FINAL: Forzar redibujado después de un momento
         setTimeout(function () {
             myMapInstance.invalidateSize();
         }, 300);
@@ -61,5 +97,4 @@ window.initMap = (dotNetHelper) => {
     } catch (error) {
         console.error("Error fatal al iniciar el mapa:", error);
     }
-
 };

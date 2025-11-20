@@ -47,5 +47,7 @@
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/pages/monitoreotabs/tablamedicionessensor.razor")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/routes.razor")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/_imports.razor")]
+[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/layout/mainlayout.razor.css")]
+[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/layout/navmenu.razor.css")]
 
 
