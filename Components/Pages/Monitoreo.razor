@@ -97,7 +97,7 @@
                                     </div>
                                     <div class="text-end">
                                         <h2 class="mb-0">@latestData.PH.ToString("F2")</h2>
-                                        <span class="badge bg-@GetColorStatus(latestData.PhStatus)">@latestData.PhStatus</span>
+                                        <span class="badge bg-@GetColorStatus(latestData.PHSTATUS)">@latestData.PHSTATUS</span>
                                     </div>
                                 </li>
                             }
@@ -109,14 +109,14 @@
                                         <small class="text-muted">Turbidez</small>
                                     </div>
                                     <div class="text-end">
-                                        <h2 class="mb-0">@latestData.TurbidezNTU.ToString("F2")</h2>
-                                        <span class="badge bg-@GetColorStatus(latestData.TurbidezStatus)">@latestData.TurbidezStatus</span>
+                                        <h2 class="mb-0">@latestData.TURBIDEZNTU.ToString("F2")</h2>
+                                        <span class="badge bg-@GetColorStatus(latestData.TURBIDEZSTATUS)">@latestData.TURBIDEZSTATUS</span>
                                     </div>
                                 </li>
                             }
                             <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
                                 <span class="h6 mb-0">Temp:</span>
-                                <span class="h5 mb-0">@latestData.TemperaturaC.ToString("F1") °C</span>
+                                <span class="h5 mb-0">@latestData.TEMPERATURAC.ToString("F1") °C</span>
                             </li>
                         </ul>
                     }

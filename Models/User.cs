@@ -16,7 +16,7 @@ namespace MonitoreoMultifuente3.Models
 
         // Relaciones con otras tablas
         [InverseProperty("User")]
-        public virtual ICollection<Medicion> Mediciones { get; set; }
+        public virtual ICollection<Medicion> Mediciones { get; set; } = new List<Medicion>();
 
         // El resto de las propiedades del modelo User (como Id, Email, etc.)
         // son gestionadas internamente por la clase base IdentityUser<int>.

@@ -45,12 +45,12 @@ namespace MonitoreoMultifuente3.Models
         public DateTime updated_at { get; set; }
 
         [Column("user_id")]
-        public int user_id { get; set; } // <-- CORREGIDO A INT
+        public int user_id { get; set; } //
         [ForeignKey("user_id")]
-        public virtual ApplicationUser User { get; set; } = null!;
+        public virtual ApplicationUser User { get; set; } = null!; // Asegúrate que sea ApplicationUser
 
         [Column("created_by")]
-        public int created_by { get; set; } // <-- CORREGIDO A INT
+        public int created_by { get; set; } //
 
         [Column("valor_analogico")]
         public double valor_analogico { get; set; }

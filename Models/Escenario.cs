@@ -18,6 +18,8 @@
         public DateTime updated_at { get; set; }
         public int ubicacion_id { get; set; }
 
+        public int tipo_e { get; set; }
+
         // CORREGIDO: Las relaciones ahora pueden ser nulas para evitar errores de "required" al crear el objeto.
         public virtual Ubicacion? Ubicacion { get; set; }
         public virtual ICollection<Medicion> Mediciones { get; set; } = new List<Medicion>();

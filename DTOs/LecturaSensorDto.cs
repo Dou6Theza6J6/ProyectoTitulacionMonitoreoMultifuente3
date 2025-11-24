@@ -10,6 +10,7 @@ namespace MonitoreoMultifuente3.DTOs
         public long TimestampMs { get; set; }
 
         [JsonPropertyName("escenario")]
+
         public string? EscenarioArduino { get; set; } // Lo ignoramos para guardar, usamos el seleccionado en UI
 
         // --- PARÁMETROS A GUARDAR ---
@@ -19,33 +20,33 @@ namespace MonitoreoMultifuente3.DTOs
         public float PH { get; set; }
 
         [JsonPropertyName("pH_CV")]
-        public float PhCV { get; set; }
+        public float PHCV { get; set; }
 
         [JsonPropertyName("pH_status")]
-        public string? PhStatus { get; set; }
+        public string? PHSTATUS { get; set; }
 
         // 2. Turbidez
         [JsonPropertyName("turbidez_NTU")]
-        public float TurbidezNTU { get; set; }
+        public float TURBIDEZNTU { get; set; }
 
         [JsonPropertyName("turbidez_CV")]
-        public float TurbidezCV { get; set; }
+        public float TURBIDEZCV { get; set; }
 
         [JsonPropertyName("turbidez_status")]
-        public string? TurbidezStatus { get; set; }
+        public string? TURBIDEZSTATUS { get; set; }
 
         // 3. Temperatura
         [JsonPropertyName("temperatura_C")]
-        public float TemperaturaC { get; set; }
+        public float TEMPERATURAC { get; set; }
 
         [JsonPropertyName("temperatura_CV")]
-        public float TemperaturaCV { get; set; }
+        public float TEMPERATURACV { get; set; }
 
         // 4. Conductividad
         [JsonPropertyName("conductividad_uScm")]
-        public float ConductividadUsScm { get; set; }
+        public float CONDUCTIVIDADUSSCM { get; set; }
 
         [JsonPropertyName("conductividad_CV")]
-        public float ConductividadCV { get; set; }
+        public float CONDUCTIVIDADCV { get; set; }
     }
 }

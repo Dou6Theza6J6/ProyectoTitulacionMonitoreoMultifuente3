@@ -170,10 +170,10 @@ namespace MonitoreoMultifuente3.Services
                 }
 
                 // Mapeo exacto a tu JSON
-                AgregarMedicion("pH", lectura.PH, lectura.PhCV, lectura.PhStatus);
-                AgregarMedicion("Turbidez", lectura.TurbidezNTU, lectura.TurbidezCV, lectura.TurbidezStatus);
-                AgregarMedicion("Temperatura", lectura.TemperaturaC, lectura.TemperaturaCV, "ideal");
-                AgregarMedicion("Conductividad", lectura.ConductividadUsScm, lectura.ConductividadCV, "ideal");
+                AgregarMedicion("pH", lectura.PH, lectura.PHCV, lectura.PHSTATUS);
+                AgregarMedicion("Turbidez", lectura.TURBIDEZNTU, lectura.TURBIDEZCV, lectura.TURBIDEZSTATUS);
+                AgregarMedicion("Temperatura", lectura.TEMPERATURAC, lectura.TEMPERATURACV, "ideal");
+                AgregarMedicion("Conductividad", lectura.CONDUCTIVIDADUSSCM, lectura.CONDUCTIVIDADCV, "ideal");
 
                 if (mediciones.Any())
                 {

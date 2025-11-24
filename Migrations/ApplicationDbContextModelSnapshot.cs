@@ -311,6 +311,9 @@ namespace MonitoreoMultifuente3.Migrations
                     b.Property<string>("pais")
                         .HasColumnType("longtext");
 
+                    b.Property<int>("tipo_e")
+                        .HasColumnType("int");
+
                     b.Property<int>("ubicacion_id")
                         .HasColumnType("int");
 
@@ -789,7 +792,7 @@ namespace MonitoreoMultifuente3.Migrations
                     b.HasOne("Parametro", "Parametro")
                         .WithMany("Mediciones")
                         .HasForeignKey("parametro_id")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Sensor", "Sensor")

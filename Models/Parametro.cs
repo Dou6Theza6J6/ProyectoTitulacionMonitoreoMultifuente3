@@ -25,8 +25,8 @@ public class Parametro
     [ForeignKey("sensor_id")]
     public virtual Sensor? Sensor { get; set; }
 
-    public virtual ICollection<Medicion> Mediciones { get; set; }
-    
+    public virtual ICollection<Medicion> Mediciones { get; set; } = new List<Medicion>();
+
     public Parametro()
     {
         Mediciones = new List<Medicion>();
