@@ -1,68 +1,131 @@
-﻿@* Este es un NUEVO componente que filtra por Parámetro en lugar de Sensor *@
-
-@using MonitoreoMultifuente3.Models
+﻿@using MonitoreoMultifuente3.Models
 @using MonitoreoMultifuente3.Enums
 @using MonitoreoMultifuente3.Data
 @using Microsoft.EntityFrameworkCore
-@inject ApplicationDbContext dbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
-<div class="table-responsive">
-    <table class="table table-striped table-hover">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Sensor</th> @* ¡Ahora mostramos el Sensor! *@
-                <th>Valor</th>
-                <th>CV (%)</th>
-                <th>Status</th>
-                <th>Fecha/Hora</th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (mediciones == null)
-            {
-                <tr>
-                    <td colspan="6">Cargando mediciones...</td>
-                </tr>
-            }
-            else
-            {
-                @foreach (var medicion in mediciones)
-                {
-                    <tr>
-                        <td>@medicion.registro_medicion_id</td>
+<div class="card shadow mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 font-weight-bold text-primary">Historial - @ParametroNombre</h6>
 
-                        @* Mostramos el nombre del sensor que tomó esta lectura *@
-                        <td>@medicion.Sensor.nombre_sensor</td>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm @(filtro == "hoy" ? "btn-primary" : "btn-outline-primary")" @onclick='() => CargarDatos("hoy")'>Hoy</button>
+            <button type="button" class="btn btn-sm @(filtro == "ayer" ? "btn-primary" : "btn-outline-primary")" @onclick='() => CargarDatos("ayer")'>Ayer</button>
+            <button type="button" class="btn btn-sm @(filtro == "semana" ? "btn-primary" : "btn-outline-primary")" @onclick='() => CargarDatos("semana")'>Semana</button>
+            <button type="button" class="btn btn-sm @(filtro == "mes" ? "btn-primary" : "btn-outline-primary")" @onclick='() => CargarDatos("mes")'>Mes</button>
+            <button type="button" class="btn btn-sm @(filtro == "anio" ? "btn-primary" : "btn-outline-primary")" @onclick='() => CargarDatos("anio")'>Año</button>
+        </div>
+    </div>
 
-                          <td>@medicion.valor_analogico.ToString("F2")</td>
+    <div class="card-body">
+        @if (mediciones == null)
+        {
+            <div class="text-center"><div class="spinner-border text-primary"></div></div>
+        }
+        else if (mediciones.Count == 0)
+        {
+            <p class="text-center text-muted">No hay datos registrados para este periodo.</p>
+        }
+        else
+        {
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-bordered table-striped table-hover text-center">
+                    <thead class="table-dark" style="position: sticky; top: 0;">
+                        <tr>
+                            <th>ID</th>
+                            <th>Sensor</th>
+                            <th>Valor (@Unidad)</th>
+                            <th>CV (%)</th>
+                            <th>Estado</th>
+                            <th>Fecha/Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in mediciones)
+                        {
+                            <tr>
+                                <td>@item.registro_medicion_id</td>
+                                <td>@(item.Sensor != null ? item.Sensor.nombre_sensor : "Sensor eliminado")</td>
 
-                        @* Manejo de nulos que implementamos antes *@
-                        <td>@(medicion.valor_cv_decimal.HasValue ? medicion.valor_cv_decimal.Value.ToString("F2") : "---")</td>
+                                @* Datos reales de Medicion.cs *@
+                                <td class="fw-bold">@item.valor_analogico.ToString("F2")</td>
+                                <td>@(item.valor_cv_decimal.HasValue? item.valor_cv_decimal.Value.ToString("F2") : "0.00")</td>
 
-                        <td>@((StatusMedicion)medicion.status)</td>
-                      <td>@medicion.fecha_hora.ToString("g")</td> 
-                    </tr>
-                }
-            }
-        </tbody>
-    </table>
+                                <td>
+                                    <span class="badge @ObtenerClaseStatus((StatusMedicion)item.status)">
+                                        @((StatusMedicion)item.status)
+                                    </span>
+                                </td>
+
+                                <td>@item.fecha_hora.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
-    [Parameter]
-    public int ParametroId { get; set; } // <-- El parámetro ahora es el ID del Parámetro
+    [Parameter] public int ParametroId { get; set; }
+    [Parameter] public string ParametroNombre { get; set; } = "Parámetro";
+    [Parameter] public string Unidad { get; set; } = "";
 
     private List<Medicion>? mediciones;
+    private string filtro = "hoy";
 
     protected override async Task OnParametersSetAsync()
     {
-        // El 'Include' es vital para que .Sensor no sea nulo
-        mediciones = await dbContext.Mediciones
-            .Include(m => m.Sensor)      // Cargar datos del Sensor
-            .Where(m => m.parametro_id == ParametroId) // <-- ¡FILTRADO POR PARÁMETRO!
-            .OrderByDescending(m => m.fecha_hora)
-            .Take(20)
-            .ToListAsync();
+        await CargarDatos(filtro);
     }
+
+    private async Task CargarDatos(string nuevoFiltro)
+    {
+        filtro = nuevoFiltro;
+        using var context = DbFactory.CreateDbContext();
+
+        // 1. Consulta base por Parámetro
+        var query = context.Mediciones
+            .Include(m => m.Sensor)
+            .Where(m => m.parametro_id == ParametroId);
+
+        // 2. Aplicar Filtros de Fecha
+        DateTime hoy = DateTime.Today;
+
+        switch (filtro)
+        {
+            case "hoy":
+                query = query.Where(m => m.fecha_hora >= hoy);
+                break;
+            case "ayer":
+                query = query.Where(m => m.fecha_hora >= hoy.AddDays(-1) && m.fecha_hora < hoy);
+                break;
+            case "semana":
+                query = query.Where(m => m.fecha_hora >= hoy.AddDays(-7));
+                break;
+            case "mes":
+                query = query.Where(m => m.fecha_hora >= hoy.AddMonths(-1));
+                break;
+            case "anio":
+                query = query.Where(m => m.fecha_hora >= hoy.AddYears(-1));
+                break;
+        }
+
+        // 3. Ordenar y Ejecutar
+        mediciones = await query
+            .OrderByDescending(m => m.fecha_hora)
+            .Take(200) // Límite de seguridad
+            .ToListAsync();
+
+        StateHasChanged();
+    }
+
+    private string ObtenerClaseStatus(StatusMedicion status) => status switch
+    {
+        StatusMedicion.Ideal => "bg-success",
+        StatusMedicion.Apta => "bg-primary",
+        StatusMedicion.NoApta => "bg-danger",
+        _ => "bg-secondary"
+    };
 }

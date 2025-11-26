@@ -2,40 +2,47 @@
 
 namespace MonitoreoMultifuente3.DTOs
 {
+    // Esta clase es el "espejo" exacto de tu JSON de Arduino
     public class LecturaArduinoDto
     {
-        // --- pH ---
+        // Arduino: doc["pH"] = ph;
         [JsonPropertyName("pH")]
         public float PH { get; set; }
 
+        // Arduino: doc["pH_CV"] = cv_ph;
         [JsonPropertyName("pH_CV")]
-        public float PhCV { get; set; }
+        public float PH_CV { get; set; }
 
+        // Arduino: doc["pH_status"]
         [JsonPropertyName("pH_status")]
-        public string? PhStatus { get; set; }
+        public string PH_Status { get; set; } = "";
 
-        // --- Turbidez ---
+        // Arduino: doc["turbidez_NTU"]
         [JsonPropertyName("turbidez_NTU")]
-        public float TurbidezNTU { get; set; }
+        public float Turbidez_NTU { get; set; }
 
+        // Arduino: doc["turbidez_CV"]
         [JsonPropertyName("turbidez_CV")]
-        public float TurbidezCV { get; set; }
+        public float Turbidez_CV { get; set; }
 
+        // Arduino: doc["turbidez_status"]
         [JsonPropertyName("turbidez_status")]
-        public string? TurbidezStatus { get; set; }
+        public string Turbidez_Status { get; set; } = "";
 
-        // --- Temperatura ---
+        // Arduino: doc["temperatura_C"]
         [JsonPropertyName("temperatura_C")]
-        public float TemperaturaC { get; set; }
+        public float Temperatura_C { get; set; }
 
+        // Arduino: doc["temperatura_CV"]
         [JsonPropertyName("temperatura_CV")]
-        public float TemperaturaCV { get; set; }
+        public float Temperatura_CV { get; set; }
 
-        // --- Conductividad ---
+        // Arduino: doc["conductividad_uScm"]
         [JsonPropertyName("conductividad_uScm")]
-        public float ConductividadUsScm { get; set; }
+        public float Conductividad_uScm { get; set; }
 
+        // Arduino: doc["conductividad_CV"]
         [JsonPropertyName("conductividad_CV")]
-        public float ConductividadCV { get; set; }
+        public float Conductividad_CV { get; set; }
     }
 }

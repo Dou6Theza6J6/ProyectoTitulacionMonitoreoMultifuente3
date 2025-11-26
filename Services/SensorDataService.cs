@@ -1,16 +1,16 @@
-﻿using System.IO.Ports;
-using System.Text.Json;
-using System.Diagnostics;
-using MonitoreoMultifuente3.Data;
-using MonitoreoMultifuente3.Models;
-using MonitoreoMultifuente3.DTOs;
-using MonitoreoMultifuente3.Enums; // <--- Importante para StatusMedicion
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO.Ports;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using MonitoreoMultifuente3.Data;
+using MonitoreoMultifuente3.DTOs;
+using MonitoreoMultifuente3.Enums;
+using MonitoreoMultifuente3.Models;
 
 namespace MonitoreoMultifuente3.Services
 {
@@ -25,6 +25,7 @@ namespace MonitoreoMultifuente3.Services
         private int _currentSensorId = 0;
         private int _currentUserId = 0;
 
+        // Evento para enviar datos a la UI en tiempo real
         public event Action<LecturaArduinoDto>? OnDataReceived;
 
         public SensorDataService(IServiceScopeFactory scopeFactory)
@@ -39,32 +40,33 @@ namespace MonitoreoMultifuente3.Services
 
         public string[] GetAvailablePorts() => SerialPort.GetPortNames();
 
-        // --- LÓGICA PRINCIPAL DE PROCESAMIENTO ---
+        // --- LÓGICA PRINCIPAL DE PROCESAMIENTO Y GUARDADO ---
 
-        // Este método orquesta el guardado llamando a las funciones individuales
         private async Task ProcesarYGuardar(LecturaArduinoDto data)
         {
-            // 1. Validar que tengamos configuración
+            // 1. Validar que tengamos configuración seleccionada
             if (_currentEscenarioId == 0 || _currentSensorId == 0 || _currentUserId == 0)
             {
                 Debug.WriteLine("Datos recibidos pero NO guardados: Falta seleccionar Escenario, Sensor o Usuario.");
                 return;
             }
 
+            // Usamos un Scope nuevo para operaciones de base de datos en segundo plano
             using (var scope = _scopeFactory.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                // 2. Obtener parámetros configurados para el sensor actual en la BD
+                // 2. Obtener qué parámetros tiene configurados este sensor en la BD
+                // (Ej: Si el sensor tiene pH y Temperatura, solo guardaremos esos)
                 var parametrosDelSensor = await db.Parametros
                     .Where(p => p.sensor_id == _currentSensorId)
                     .ToListAsync();
 
                 if (!parametrosDelSensor.Any()) return;
 
-                var fechaActual = DateTime.UtcNow;
+                var fechaActual = DateTime.Now; // Usamos hora local del servidor/PC
 
-                // 3. Llamar a métodos individuales si el parámetro existe en la BD
+                // 3. Llamar a métodos individuales solo si el parámetro existe para este sensor
 
                 // --- pH ---
                 var paramPH = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("pH", StringComparison.OrdinalIgnoreCase));
@@ -98,13 +100,12 @@ namespace MonitoreoMultifuente3.Services
                 if (db.ChangeTracker.HasChanges())
                 {
                     await db.SaveChangesAsync();
-                    Debug.WriteLine("Mediciones guardadas correctamente por métodos individuales.");
+                    Debug.WriteLine("Mediciones guardadas correctamente en la BD.");
                 }
             }
         }
 
         // --- MÉTODOS INDIVIDUALES DE GUARDADO ---
-        // Cada uno se encarga de crear el objeto Medicion con los datos correctos
 
         private void GuardarPH(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
         {
@@ -115,14 +116,17 @@ namespace MonitoreoMultifuente3.Services
                 user_id = _currentUserId,
                 created_by = _currentUserId,
                 parametro_id = parametroId,
+
                 fecha_hora = fecha,
                 created_at = fecha,
                 updated_at = fecha,
 
-                // CORRECCIÓN: Usamos los nombres exactos de tu DTO (PascalCase)
+                // Mapeo usando las propiedades del DTO (LecturaArduinoDto)
                 valor_analogico = (double)data.PH,
-                valor_cv_decimal = (decimal)data.PhCV,
-                status = (int)MapStatus(data.PhStatus)
+                valor_cv_decimal = (decimal)data.PH_CV,
+                status = (int)MapStatus(data.PH_Status),
+
+                valor_digital = 0 // Valor por defecto si no se usa
             });
         }
 
@@ -135,13 +139,16 @@ namespace MonitoreoMultifuente3.Services
                 user_id = _currentUserId,
                 created_by = _currentUserId,
                 parametro_id = parametroId,
+
                 fecha_hora = fecha,
                 created_at = fecha,
                 updated_at = fecha,
 
-                valor_analogico = (double)data.TurbidezNTU,
-                valor_cv_decimal = (decimal)data.TurbidezCV,
-                status = (int)MapStatus(data.TurbidezStatus)
+                valor_analogico = (double)data.Turbidez_NTU,
+                valor_cv_decimal = (decimal)data.Turbidez_CV,
+                status = (int)MapStatus(data.Turbidez_Status),
+
+                valor_digital = 0
             });
         }
 
@@ -154,13 +161,16 @@ namespace MonitoreoMultifuente3.Services
                 user_id = _currentUserId,
                 created_by = _currentUserId,
                 parametro_id = parametroId,
+
                 fecha_hora = fecha,
                 created_at = fecha,
                 updated_at = fecha,
 
-                valor_analogico = (double)data.TemperaturaC,
-                valor_cv_decimal = (decimal)data.TemperaturaCV,
-                status = (int)StatusMedicion.Ideal
+                valor_analogico = (double)data.Temperatura_C,
+                valor_cv_decimal = (decimal)data.Temperatura_CV,
+                status = (int)StatusMedicion.Ideal, // Temperatura siempre suele ser 'Ideal' o no aplica norma estricta igual que pH
+
+                valor_digital = 0
             });
         }
 
@@ -173,23 +183,26 @@ namespace MonitoreoMultifuente3.Services
                 user_id = _currentUserId,
                 created_by = _currentUserId,
                 parametro_id = parametroId,
+
                 fecha_hora = fecha,
                 created_at = fecha,
                 updated_at = fecha,
 
-                valor_analogico = (double)data.ConductividadUsScm,
-                valor_cv_decimal = (decimal)data.ConductividadCV,
-                status = (int)StatusMedicion.Ideal
+                valor_analogico = (double)data.Conductividad_uScm,
+                valor_cv_decimal = (decimal)data.Conductividad_CV,
+                status = (int)StatusMedicion.Ideal,
+
+                valor_digital = 0
             });
         }
 
-        // --- LÓGICA DE CONEXIÓN Y PARSEO JSON ---
+        // --- LÓGICA DE CONEXIÓN SERIAL Y PARSEO JSON ---
 
         public bool StartListening(string portName)
         {
             try
             {
-                StopListening();
+                StopListening(); // Cerrar si había uno abierto
                 _serialPort = new SerialPort(portName, 9600);
                 _serialPort.DataReceived += SerialPort_DataReceived;
                 _serialPort.Open();
@@ -197,7 +210,7 @@ namespace MonitoreoMultifuente3.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error puerto: {ex.Message}");
+                Debug.WriteLine($"Error al abrir puerto: {ex.Message}");
                 return false;
             }
         }
@@ -206,6 +219,7 @@ namespace MonitoreoMultifuente3.Services
         {
             if (_serialPort != null && _serialPort.IsOpen)
             {
+                _serialPort.DataReceived -= SerialPort_DataReceived;
                 _serialPort.Close();
                 _serialPort.Dispose();
                 _serialPort = null;
@@ -216,20 +230,30 @@ namespace MonitoreoMultifuente3.Services
         {
             try
             {
-                _jsonBuffer += ((SerialPort)sender).ReadExisting();
+                SerialPort sp = (SerialPort)sender;
+                // Leemos lo que haya en el buffer
+                string data = sp.ReadExisting();
+                _jsonBuffer += data;
+
+                // Procesamos línea por línea
                 string? line;
                 while ((line = ExtractLine()) != null)
                 {
                     ProcessJson(line);
                 }
             }
-            catch (Exception ex) { Debug.WriteLine($"Error lectura: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error lectura serial: {ex.Message}");
+            }
         }
 
+        // Extrae una línea completa del buffer acumulado
         private string? ExtractLine()
         {
             int idx = _jsonBuffer.IndexOf('\n');
             if (idx == -1) return null;
+
             string line = _jsonBuffer.Substring(0, idx).Trim();
             _jsonBuffer = _jsonBuffer.Substring(idx + 1);
             return line;
@@ -237,23 +261,31 @@ namespace MonitoreoMultifuente3.Services
 
         private void ProcessJson(string json)
         {
+            // Validación básica de inicio de JSON
             if (!json.StartsWith("{")) return;
 
             try
             {
+                // Deserializamos usando el DTO que coincide con Arduino
                 var data = JsonSerializer.Deserialize<LecturaArduinoDto>(json);
+
                 if (data != null)
                 {
-                    // Notificar UI
+                    // 1. Notificar a la UI (Gráficas, Tablas en tiempo real)
                     OnDataReceived?.Invoke(data);
 
-                    // Lanzar tarea de guardado
+                    // 2. Lanzar tarea de guardado en BD (Fuego y olvido)
                     Task.Run(() => ProcesarYGuardar(data));
                 }
             }
-            catch (JsonException) { /* Ignorar JSON incompleto */ }
+            catch (JsonException)
+            {
+                // Ignorar líneas incompletas o corruptas
+                Debug.WriteLine("JSON incompleto o inválido recibido.");
+            }
         }
 
+        // Convierte el string del Arduino al Enum de C#
         private StatusMedicion MapStatus(string? s) => s?.ToLower() switch
         {
             "ideal" => StatusMedicion.Ideal,
@@ -262,9 +294,12 @@ namespace MonitoreoMultifuente3.Services
             "no apta" => StatusMedicion.NoApta,
             "no_apto" => StatusMedicion.NoApta,
             "fuera_norma" => StatusMedicion.NoApta,
-            _ => StatusMedicion.Ideal
+            _ => StatusMedicion.Ideal // Valor por defecto
         };
 
-        public void Dispose() => StopListening();
+        public void Dispose()
+        {
+            StopListening();
+        }
     }
 }

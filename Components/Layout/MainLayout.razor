@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
 
 <div class="page">
     <div class="sidebar">
@@ -15,14 +16,17 @@
         <article class="content px-4">
             <AuthorizeView Roles="Administrador">
                 <Authorized>
-                    <div id="admin-alert" class="alert alert-primary d-flex align-items-center justify-content-between" role="alert">
-                        <div>
-                            <i class="bi bi-shield-lock-fill me-2"></i>
-                            <strong>Modo Administrador activo</strong>
+                    @if (mostrarAvisoAdmin)
+                    {
+                        <div class="alert alert-warning d-flex align-items-center justify-content-between" role="alert" style="margin-bottom: 1rem;">
+                            <div>
+                                <i class="bi bi-shield-lock-fill me-2"></i>
+                                <strong>Modo Administrador activo</strong>
+                            </div>
+                            @* Aquí está la corrección: llamamos a una función C# *@
+                            <button type="button" class="btn-close" aria-label="Close" @onclick="CerrarAviso"></button>
                         </div>
-                        <button type="button" class="btn-close" aria-label="Close"
-                                onclick="document.getElementById('admin-alert').style.display='none';"></button>
-                    </div>
+                    }
                 </Authorized>
             </AuthorizeView>
 
@@ -30,3 +34,15 @@
         </article>
     </main>
 </div>
+
+@code {
+    // Variable de control para ocultar/mostrar
+    private bool mostrarAvisoAdmin = true;
+
+    private void CerrarAviso()
+    {
+        mostrarAvisoAdmin = false;
+        // Esto le dice a Blazor que repinte la pantalla sin el aviso
+        StateHasChanged();
+    }
+}
