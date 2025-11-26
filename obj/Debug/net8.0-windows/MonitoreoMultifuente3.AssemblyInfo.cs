@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MonitoreoMultifuente3")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+616b2bd37ccf8e50ef0d6e7ac33639eb9d6b180d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+709aa4b91b7e0ff13663bea59e855d95e748affb")]
 [assembly: System.Reflection.AssemblyProductAttribute("MonitoreoMultifuente3")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MonitoreoMultifuente3")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

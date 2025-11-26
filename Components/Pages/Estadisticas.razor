@@ -166,7 +166,8 @@
                 Display = AxisDisplay.True,
                 Position = (axisIndex % 2 == 0) ? Position.Left : Position.Right,
                 ScaleLabel = new ScaleLabel { Display = true, LabelString = parametro.unidad_medida },
-                Ticks = new LinearCartesianTicks { BeginAtZero = true }
+                // CAMBIO REALIZADO AQUÍ: BeginAtZero = false para que la gráfica no se vea plana
+                Ticks = new LinearCartesianTicks { BeginAtZero = false }
             };
             _lineChartConfig.Options.Scales.YAxes.Add(yAxis);
 

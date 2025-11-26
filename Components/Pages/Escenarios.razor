@@ -14,6 +14,7 @@
     </div>
 
     <div class="row">
+        @* Columna Izquierda: Formulario *@
         <div class="col-md-4">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-primary text-white">
@@ -41,14 +42,29 @@
                             <InputText class="form-control" @bind-Value="nuevoEscenario.descripcion" />
                         </div>
 
+                        @* --- SECCIÓN CORREGIDA CON TUS NOMBRES DE PROPIEDAD --- *@
                         <div class="mb-2">
-                            <label class="form-label fw-bold small">Ubicación</label>
-                            <InputText class="form-control" @bind-Value="nuevaUbicacion.nombre" />
-                        </div>
+                            <label class="form-label fw-bold small">Dirección (Auto-relleno desde Mapa)</label>
 
-                        <div class="row">
-                            <div class="col-6 mb-2"><label class="small">Ciudad</label><InputText class="form-control form-control-sm" @bind-Value="nuevoEscenario.ciudad" /></div>
-                            <div class="col-6 mb-2"><label class="small">País</label><InputText class="form-control form-control-sm" @bind-Value="nuevoEscenario.pais" /></div>
+                            <InputText class="form-control form-control-sm mb-1" @bind-Value="nuevoEscenario.calles" placeholder="Calle y número" />
+
+                            <div class="row g-1">
+                                <div class="col-4">
+                                    <InputText class="form-control form-control-sm" @bind-Value="nuevoEscenario.codigo_p" placeholder="C.P." />
+                                </div>
+                                <div class="col-4">
+                                    <InputText class="form-control form-control-sm" @bind-Value="nuevoEscenario.ciudad" placeholder="Ciudad" />
+                                </div>
+                                <div class="col-4">
+                                    <InputText class="form-control form-control-sm" @bind-Value="nuevoEscenario.pais" placeholder="País" />
+                                </div>
+                            </div>
+                        </div>
+                        @* ---------------------------------------------------- *@
+
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small">Nombre Ubicación (Alias)</label>
+                            <InputText class="form-control" @bind-Value="nuevaUbicacion.nombre" placeholder="Ej: Entrada Principal" />
                         </div>
 
                         <div class="mb-3">
@@ -67,6 +83,7 @@
             </div>
         </div>
 
+        @* Columna Derecha: Mapa *@
         <div class="col-md-8">
             <div class="card shadow-sm h-100">
                 <div class="card-body p-0">
@@ -78,10 +95,10 @@
 
     <hr class="my-4" />
 
+    @* Tabla Historial *@
     <div class="card shadow-sm">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">📚 Historial</h5>
-
             <div class="d-flex align-items-center">
                 <span class="text-white me-2 small">Filtrar:</span>
                 <select class="form-select form-select-sm" style="width: 150px;" @bind="filtroTipo">
@@ -98,7 +115,7 @@
                         <th>Nombre</th>
                         <th>Tipo</th>
                         <th>Descripción</th>
-                        <th>Ubicación</th>
+                        <th>Dirección</th>
                         <th>Fecha</th>
                         <AuthorizeView Roles="Administrador"><th class="text-center">Acciones</th></AuthorizeView>
                     </tr>
@@ -125,7 +142,11 @@
                                 }
                             </td>
                             <td>@item.descripcion</td>
-                            <td><strong>@item.Ubicacion?.nombre</strong><br /><small>@item.ciudad</small></td>
+                            <td>
+                                @* Aquí mostramos los datos corregidos *@
+                                <strong>@item.ciudad</strong>, @item.pais<br />
+                                <small class="text-muted">@item.calles C.P: @item.codigo_p</small>
+                            </td>
                             <td>@item.created_at.ToLocalTime().ToString("d")</td>
                             <AuthorizeView Roles="Administrador">
                                 <Authorized>
@@ -144,11 +165,9 @@
 
 @code {
     private List<Escenario> escenarios = new();
-    private Escenario nuevoEscenario = new() { tipo_e = 1 }; // Por defecto In Situ (1)
+    private Escenario nuevoEscenario = new() { tipo_e = 1 };
     private Ubicacion nuevaUbicacion = new();
     private DotNetObjectReference<Escenarios>? dotNetHelper;
-
-    // 0 = Todos, 1 = In Situ, 2 = Ex Situ
     private int filtroTipo = 0;
 
     protected override async Task OnInitializedAsync() => await Cargar();
@@ -172,16 +191,29 @@
     }
 
     [JSInvokable]
-    public async Task SetMapCoordinates(double lat, double lng)
+    public async Task SetMapCoordinates(double lat, double lng, string calle = "", string cp = "", string ciudad = "", string pais = "")
     {
         nuevaUbicacion.latitud = Math.Round(lat, 6);
         nuevaUbicacion.longitud = Math.Round(lng, 6);
+
+        // CORREGIDO: Asignación a propiedades correctas 'calles' y 'codigo_p'
+        nuevoEscenario.calles = calle;
+        nuevoEscenario.codigo_p = cp;
+        nuevoEscenario.ciudad = ciudad;
+        nuevoEscenario.pais = pais;
+
+        if (string.IsNullOrWhiteSpace(nuevaUbicacion.nombre) && !string.IsNullOrWhiteSpace(calle))
+        {
+            nuevaUbicacion.nombre = calle;
+        }
+
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task GuardarMuestra()
     {
         var now = DateTime.UtcNow;
+
         nuevaUbicacion.created_at = now;
         nuevaUbicacion.updated_at = now;
         DbContext.Ubicaciones.Add(nuevaUbicacion);
@@ -194,6 +226,7 @@
         await DbContext.SaveChangesAsync();
 
         await Cargar();
+
         nuevoEscenario = new() { tipo_e = 1 };
         nuevaUbicacion = new();
     }

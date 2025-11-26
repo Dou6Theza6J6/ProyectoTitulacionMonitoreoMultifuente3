@@ -1,48 +1,85 @@
-﻿@* MonitoreoMultifuente3/Components/Pages/MonitoreoTabs/TablaMedicionesSensor.razor *@
-
-@using MonitoreoMultifuente3.Models
+﻿@using MonitoreoMultifuente3.Models
 @using MonitoreoMultifuente3.Enums
 @using MonitoreoMultifuente3.Data
 @using Microsoft.EntityFrameworkCore
 
-@* CAMBIO: Ya no inyectamos el DbContext, sino la FÁBRICA *@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 
-<div class="table-responsive">
-    <table class="table table-striped table-hover">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Valor</th>
-                <th>CV (%)</th>
-                <th>Status</th>
-                <th>Fecha/Hora</th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (mediciones == null)
-            {
-                <tr>
-                    <td colspan="5">Cargando mediciones...</td>
-                </tr>
-            }
-            else
-            {
-                @foreach (var medicion in mediciones)
+<div class="card shadow-sm border-0">
+    @* --- ENCABEZADO: TÍTULO A LA IZQUIERDA, FILTRO A LA DERECHA --- *@
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <h6 class="m-0 fw-bold text-primary">
+            <i class="oi oi-clock"></i> Historial de Mediciones
+        </h6>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted fw-bold">Fecha:</span>
+            <div class="input-group input-group-sm" style="width: 160px;">
+                <input type="date" class="form-control" value="@(FechaFiltro?.ToString("yyyy-MM-dd"))" @onchange="OnFechaChanged" />
+                @if (FechaFiltro.HasValue)
                 {
-                    <tr>
-                        <td>@medicion.registro_medicion_id</td>
-                        <td>@medicion.valor_analogico.ToString("F2")</td>
-
-                        <td>@(medicion.valor_cv_decimal.HasValue ? medicion.valor_cv_decimal.Value.ToString("F2") : "---")</td>
-
-                        <td>@((StatusMedicion)medicion.status)</td>
-                        <td>@medicion.fecha_hora.ToString("g")</td> 
-                    </tr>
+                    <button class="btn btn-outline-secondary" @onclick="LimpiarFiltro" title="Borrar filtro">
+                        <span class="oi oi-x"></span> ✖
+                    </button>
                 }
-            }
-        </tbody>
-    </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle mb-0">
+                <thead class="table-dark small text-center">
+                    <tr>
+                        <th>ID</th>
+                        <th>Valor</th>
+                        <th>CV (%)</th>
+                        <th>Status</th>
+                        <th>Fecha/Hora</th>
+                    </tr>
+                </thead>
+                <tbody class="text-center">
+                    @if (mediciones == null)
+                    {
+                        <tr>
+                            <td colspan="5" class="py-3">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                <span class="ms-2 small">Cargando...</span>
+                            </td>
+                        </tr>
+                    }
+                    else if (mediciones.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="py-3 text-muted small">
+                                No hay datos @(FechaFiltro.HasValue ? "en esta fecha" : "recientes").
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var medicion in mediciones)
+                        {
+                            <tr>
+                                <td><small class="text-muted">@medicion.registro_medicion_id</small></td>
+                                <td class="fw-bold">@medicion.valor_analogico.ToString("F2")</td>
+                                <td>
+                                    @(medicion.valor_cv_decimal.HasValue? medicion.valor_cv_decimal.Value.ToString("F2") : "-")
+                                </td>
+                                <td>
+                                    @* Badge simple para el estado *@
+                                    <span class="badge rounded-pill @ObtenerClaseStatus(medicion.status)">
+                                        @((StatusMedicion)medicion.status)
+                                    </span>
+                                </td>
+                                <td class="small">@medicion.fecha_hora.ToString("g")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 @code {
@@ -53,21 +90,72 @@
     public int ParametroId { get; set; }
 
     private List<Medicion>? mediciones;
+    private DateTime? FechaFiltro;
 
-    // CAMBIO: Usamos la fábrica para crear un DbContext de corta duración
     protected override async Task OnParametersSetAsync()
     {
-        // Creamos un contexto SÓLO para esta operación.
+        await CargarDatos();
+    }
+
+    private async Task OnFechaChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out DateTime fechaSeleccionada))
+        {
+            FechaFiltro = fechaSeleccionada;
+        }
+        else
+        {
+            FechaFiltro = null;
+        }
+        await CargarDatos();
+    }
+
+    private async Task LimpiarFiltro()
+    {
+        FechaFiltro = null;
+        await CargarDatos();
+    }
+
+    private async Task CargarDatos()
+    {
         using (var dbContext = DbFactory.CreateDbContext())
         {
             if (SensorId > 0 && ParametroId > 0)
             {
-                mediciones = await dbContext.Mediciones
-                    .Where(m => m.sensor_id == SensorId && m.parametro_id == ParametroId)
-                    .OrderByDescending(m => m.fecha_hora) 
-                    .Take(20)
-                    .ToListAsync();
+                var query = dbContext.Mediciones
+                    .Where(m => m.sensor_id == SensorId && m.parametro_id == ParametroId);
+
+                if (FechaFiltro.HasValue)
+                {
+                    var inicioDia = FechaFiltro.Value.Date;
+                    var finDia = inicioDia.AddDays(1);
+
+                    mediciones = await query
+                        .Where(m => m.fecha_hora >= inicioDia && m.fecha_hora < finDia)
+                        .OrderByDescending(m => m.fecha_hora)
+                        .ToListAsync();
+                }
+                else
+                {
+                    mediciones = await query
+                        .OrderByDescending(m => m.fecha_hora)
+                        .Take(20)
+                        .ToListAsync();
+                }
+            }
+            else
+            {
+                mediciones = new List<Medicion>();
             }
         }
     }
+
+    private string ObtenerClaseStatus(int status) => status switch
+    {
+        1 => "bg-success", // Optimo
+        2 => "bg-info text-dark", // Bueno
+        3 => "bg-warning text-dark", // Regular
+        4 => "bg-danger", // Malo
+        _ => "bg-secondary"
+    };
 }

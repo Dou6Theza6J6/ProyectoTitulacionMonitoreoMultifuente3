@@ -40,48 +40,79 @@ window.initMap = (dotNetHelper) => {
         // Variable para el marcador actual
         var currentMarker = null;
 
-        // --- FUNCIÓN AUXILIAR: Mover marcador y avisar a Blazor ---
-        // Esta función se usa tanto para los Clics como para el Buscador
+        // --- FUNCIÓN AUXILIAR: Mover marcador y BUSCAR DIRECCIÓN ---
         function actualizarMarcador(lat, lng) {
             // Si ya existe marcador, lo borramos
             if (currentMarker) {
                 myMapInstance.removeLayer(currentMarker);
             }
-            // Ponemos el nuevo
-            currentMarker = L.marker([lat, lng]).addTo(myMapInstance);
 
-            // Enviar coordenadas a C# (Formulario)
-            // Usamos try-catch por si el componente de Blazor ya no existe
-            try {
-                dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng);
-            } catch (err) {
-                console.warn("No se pudo enviar coordenadas a Blazor:", err);
-            }
+            // Ponemos el nuevo (con draggable true para poder ajustarlo)
+            currentMarker = L.marker([lat, lng], { draggable: true }).addTo(myMapInstance);
+
+            // Evento: Si el usuario arrastra el marcador, actualizamos también
+            currentMarker.on('dragend', function (e) {
+                var position = e.target.getLatLng();
+                buscarDireccionYEnviar(position.lat, position.lng);
+            });
+
+            // Llamamos a la búsqueda de dirección inmediatamente
+            buscarDireccionYEnviar(lat, lng);
+        }
+
+        // --- NUEVA FUNCIÓN: CONECTA CON NOMINATIM Y ENVÍA A BLAZOR ---
+        function buscarDireccionYEnviar(lat, lng) {
+            var url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    var address = data.address || {};
+
+                    // Extraer datos seguros
+                    var calle = address.road || address.pedestrian || address.path || "";
+                    var numero = address.house_number || "";
+                    // Unimos calle y número
+                    var direccionCompleta = (calle + " " + numero).trim();
+
+                    var cp = address.postcode || "";
+                    var ciudad = address.city || address.town || address.village || address.county || "";
+                    var pais = address.country || "";
+
+                    // ENVIAR A BLAZOR (Lat, Lng, Calle, CP, Ciudad, Pais)
+                    try {
+                        dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng, direccionCompleta, cp, ciudad, pais);
+                    } catch (err) {
+                        console.warn("No se pudo enviar a Blazor:", err);
+                    }
+                })
+                .catch(error => {
+                    console.error("Error obteniendo dirección:", error);
+                    // Si falla la red, enviamos solo coordenadas
+                    try {
+                        dotNetHelper.invokeMethodAsync('SetMapCoordinates', lat, lng, "", "", "", "");
+                    } catch (err) { }
+                });
         }
 
         // 6. --- INTEGRACIÓN DEL BUSCADOR (GEOCODER) ---
-        // Verificamos si el plugin está cargado (por si acaso falló en index.html)
         if (L.Control.Geocoder) {
             var geocoder = L.Control.Geocoder.nominatim();
 
             L.Control.geocoder({
                 geocoder: geocoder,
-                defaultMarkGeocode: false, // Desactivamos el marcador por defecto del plugin para usar el nuestro
+                defaultMarkGeocode: false,
                 placeholder: "Buscar ciudad o dirección...",
                 errorMessage: "No encontrado"
             })
                 .on('markgeocode', function (e) {
                     var result = e.geocode;
-
-                    // 1. Centrar el mapa en el resultado encontrado
                     myMapInstance.fitBounds(result.bbox);
-
-                    // 2. Usar nuestra función para poner el marcador y llenar el formulario
                     actualizarMarcador(result.center.lat, result.center.lng);
                 })
                 .addTo(myMapInstance);
         } else {
-            console.warn("El plugin Leaflet-Control-Geocoder no está cargado. Revisa tu index.html.");
+            console.warn("El plugin Leaflet-Control-Geocoder no está cargado.");
         }
 
         // 7. Manejo de Clics en el mapa (Manual)
@@ -89,7 +120,7 @@ window.initMap = (dotNetHelper) => {
             actualizarMarcador(e.latlng.lat, e.latlng.lng);
         });
 
-        // 8. TRUCO FINAL: Forzar redibujado después de un momento
+        // 8. TRUCO FINAL: Forzar redibujado
         setTimeout(function () {
             myMapInstance.invalidateSize();
         }, 300);
