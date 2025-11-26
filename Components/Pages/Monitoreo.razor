@@ -1,4 +1,6 @@
 ﻿@page "/monitoreo"
+@page "/monitoreo/{SensorId:int}"
+
 @using MonitoreoMultifuente3.Enums
 @using MonitoreoMultifuente3.Models
 @using MonitoreoMultifuente3.Data
@@ -7,6 +9,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Identity
 @using MonitoreoMultifuente3.Services
+@using System.IO.Ports
 
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject SensorDataService SensorService
@@ -14,156 +17,379 @@
 @inject UserManager<ApplicationUser> UserManager
 @implements IDisposable
 
-<PageTitle>Monitoreo</PageTitle>
+<PageTitle>Panel de Monitoreo</PageTitle>
 
-<div class="container-fluid">
-    <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">📡 Configuración</h5>
+<div class="container-fluid p-3">
+
+    @if (!string.IsNullOrEmpty(mensajeSistema))
+    {
+        <div class="alert @claseAlerta alert-dismissible fade show shadow-sm" role="alert">
+            <i class="@iconoAlerta me-2"></i> @mensajeSistema
+            <button type="button" class="btn-close" @onclick='() => mensajeSistema = ""'></button>
         </div>
-        <div class="card-body">
-            <div class="row align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">1. Escenario:</label>
-                    <select class="form-select" @onchange="OnEscenarioChanged">
-                        <option value="0">-- Ver Todo el Historial --</option>
-                        @foreach (var esc in escenariosDisponibles)
-                        {
-                            <option value="@esc.escenario_id">@esc.nombre (@(esc.tipo_e == 1 ? "In Situ" : "Ex Situ"))</option>
-                        }
-                    </select>
-                    @if (selectedEscenarioId > 0)
+    }
+
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+
+            <div class="card shadow-sm mb-3 border-primary">
+                <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold"><i class="bi bi-usb-plug-fill"></i> Conexión</h6>
+                    @if (SensorService.IsConnected)
                     {
-                        <small class="text-success">✔ Guardando en: @nombreEscenarioActual</small>
+                        <span class="badge bg-white text-success animate__animated animate__fadeIn">CONECTADO: @SensorService.ConnectedPortName</span>
+                    }
+                </div>
+                <div class="card-body bg-light">
+
+                    @if (!SensorService.IsConnected && !buscandoPuerto)
+                    {
+                        <button class="btn btn-primary w-100 mb-3 py-2 fw-bold shadow-sm" @onclick="DetectarAutomaticamente">
+                            <i class="bi bi-magic"></i> ✨ DETECTAR ARDUINO AUTOMÁTICAMENTE
+                        </button>
+
+                        <div class="text-center text-muted small mb-2">- O selecciona manual -</div>
+                    }
+
+                    @if (buscandoPuerto)
+                    {
+                        <div class="alert alert-info text-center">
+                            <div class="spinner-border spinner-border-sm text-primary mb-1" role="status"></div>
+                            <br />Escaneando puertos seriales...<br />
+                            <small>(Esto puede tardar unos segundos)</small>
+                        </div>
                     }
                     else
                     {
+                        <div class="input-group mb-3">
+                            <select @bind="selectedPort" class="form-select" disabled="@SensorService.IsConnected">
+                                <option value="">-- Seleccionar Puerto --</option>
+                                @foreach (var p in availablePorts)
+                                {
+                                    <option value="@p">@p</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-secondary" @onclick="ActualizarPuertosManual" title="Refrescar lista">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </div>
 
-                        <small class="text-muted">👁 Modo Visualización Global</small>
+                        <div class="d-grid gap-2">
+                            @if (!SensorService.IsConnected)
+                            {
+                                <button class="btn btn-success fw-bold" @onclick="StartListeningManual" disabled="@string.IsNullOrEmpty(selectedPort)">
+                                    <i class="bi bi-play-fill"></i> CONECTAR MANUAL
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-danger fw-bold" @onclick="StopListening">
+                                    <i class="bi bi-power"></i> DESCONECTAR
+                                </button>
+                            }
+                        </div>
                     }
                 </div>
+            </div>
 
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">2. Sensor:</label>
-                    <select class="form-select" @onchange="OnSensorChanged">
-                        <option value="0">-- Seleccione --</option>
-                        @foreach (var s in sensoresDisponibles)
+            <h6 class="text-primary mb-2 fw-bold small text-uppercase border-bottom pb-1">
+                Lecturas en Vivo
+                @if (ultimoPing != DateTime.MinValue)
+                {
+                    <small class="text-muted float-end" style="font-size:0.65rem">Actualizado: @ultimoPing.ToString("HH:mm:ss")</small>
+                }
+            </h6>
+
+            @if (datosEnVivo != null)
+            {
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="card text-white bg-primary h-100 text-center shadow-sm">
+                            <div class="card-body p-2">
+                                <small class="text-white-50 fw-bold text-uppercase" style="font-size:0.7rem">pH</small>
+                                <h3 class="fw-bold my-1">@datosEnVivo.PH.ToString("0.00")</h3>
+                                <span class="badge bg-white text-primary rounded-pill">@datosEnVivo.PH_Status</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-white bg-info h-100 text-center shadow-sm">
+                            <div class="card-body p-2">
+                                <small class="text-white-50 fw-bold text-uppercase" style="font-size:0.7rem">Turbidez</small>
+                                <h3 class="fw-bold my-1">@datosEnVivo.Turbidez_NTU.ToString("0")</h3>
+                                <span class="badge bg-white text-info rounded-pill">NTU</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-dark bg-warning h-100 text-center shadow-sm">
+                            <div class="card-body p-2">
+                                <small class="text-black-50 fw-bold text-uppercase" style="font-size:0.7rem">Temperatura</small>
+                                <h3 class="fw-bold my-1">@datosEnVivo.Temperatura_C.ToString("0.0")°</h3>
+                                <span class="badge bg-dark text-warning rounded-pill">Celsius</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-white bg-success h-100 text-center shadow-sm">
+                            <div class="card-body p-2">
+                                <small class="text-white-50 fw-bold text-uppercase" style="font-size:0.7rem">Conductividad</small>
+                                <h3 class="fw-bold my-1">@datosEnVivo.Conductividad_uScm.ToString("0")</h3>
+                                <span class="badge bg-white text-success rounded-pill">uS/cm</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-secondary text-center py-4 bg-light border-0">
+                    <i class="bi bi-hourglass-split fs-4 text-muted"></i>
+                    <div class="small text-muted mt-2">Esperando datos...</div>
+                </div>
+            }
+
+            <div class="card shadow-sm border-secondary">
+                <div class="card-header bg-secondary text-white py-1">
+                    <small class="fw-bold"><i class="bi bi-database-add"></i> Configuración de Guardado</small>
+                </div>
+                <div class="card-body p-2 bg-light">
+                    <label class="form-label small fw-bold mb-1">Escenario:</label>
+                    <select class="form-select form-select-sm mb-2" @onchange="OnEscenarioChanged">
+                        <option value="0">-- Todos (Solo ver, NO guardar) --</option>
+                        @foreach (var esc in escenariosDisponibles)
                         {
-                            <option value="@s.sensor_id">@s.nombre_sensor</option>
+                            <option value="@esc.escenario_id" selected="@(selectedEscenarioId == esc.escenario_id)">@esc.nombre</option>
                         }
                     </select>
-                </div>
 
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">3. Puerto:</label>
-                    <div class="input-group">
-                        <select @bind="selectedPort" class="form-select" disabled="@isListening">
-                            @foreach (var p in availablePorts)
-                            {
-                                <option value="@p">@p</option>
-                            }
-                        </select>
-                        <button class="btn btn-primary" @onclick="StartListening"
-                                disabled="@(string.IsNullOrEmpty(selectedPort) || selectedEscenarioId == 0 || selectedSensorId == 0)">
-                            ▶
-                        </button>
-                        @if (isListening)
+                    <label class="form-label small fw-bold mb-1">Sensor (Filtro):</label>
+                    <select class="form-select form-select-sm" @onchange="OnSensorChanged">
+                        <option value="0" selected="@(selectedSensorId == 0)">🔴 TODOS LOS SENSORES</option>
+                        @foreach (var s in sensoresDisponibles)
                         {
-                            <button class="btn btn-danger" @onclick="StopListening">⏹</button>
+                            <option value="@s.sensor_id" selected="@(s.sensor_id == selectedSensorId)">@s.nombre_sensor</option>
                         }
+                    </select>
+
+                    @if (selectedEscenarioId > 0 && SensorService.IsConnected)
+                    {
+                        <div class="mt-2 text-center text-success fw-bold small border rounded bg-white py-1">
+                            <span class="spinner-grow spinner-grow-sm" role="status"></span> GUARDANDO EN BD
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow h-100">
+                <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center border-bottom">
+                    <h6 class="m-0 fw-bold text-primary">
+                        <i class="bi bi-clock-history"></i> Historial
+                        <span class="badge bg-light text-dark ms-2 border">
+                            @(selectedEscenarioId == 0 ? "Vista Global" : "Filtrado por Escenario")
+                        </span>
+                    </h6>
+                    <button class="btn btn-sm btn-light border" @onclick="CargarHistorial">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="height: 100%; max-height: 75vh; overflow-y: auto;">
+                        <table class="table table-striped table-hover align-middle mb-0 table-sm text-center caption-top">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Escenario</th>
+                                    <th>Sensor</th>
+                                    <th>Param.</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (historialMediciones == null || !historialMediciones.Any())
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center py-5 text-muted">
+                                            <i class="bi bi-inbox fs-1 opacity-25 d-block mb-2"></i>
+                                            No hay datos guardados.<br />
+                                            <small>Asegúrate de seleccionar un Escenario para empezar a guardar.</small>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var m in historialMediciones)
+                                    {
+                                        <tr>
+                                            <td class="small">@m.fecha_hora.ToString("dd/MM HH:mm:ss")</td>
+                                            <td class="small text-truncate" style="max-width: 100px;">@(m.Escenario?.nombre ?? "-")</td>
+                                            <td class="small">@(m.Sensor?.nombre_sensor ?? "-")</td>
+                                            <td class="fw-bold text-primary small">@m.Parametro?.nombre_parametro</td>
+                                            <td class="fw-bold">@m.valor_analogico.ToString("0.00")</td>
+                                            <td>
+                                                <span class="badge rounded-pill @GetStatusColor((StatusMedicion)m.status)">
+                                                    @((StatusMedicion)m.status)
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="card shadow">
-        <div class="card-header bg-secondary text-white">Historial</div>
-        <div class="card-body table-responsive" style="height:500px">
-            <table class="table table-sm table-striped">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        @if (selectedEscenarioId == 0)
-                        {
-                            <th>Escenario</th>
-                        }
-                        <th>Parámetro</th>
-                        <th>Valor</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var m in historialMediciones)
-                    {
-                        <tr>
-                            <td>@m.fecha_hora.ToLocalTime()</td>
-                            @if (selectedEscenarioId == 0)
-                            {
-                                <td><small>@m.Escenario?.nombre</small></td>
-                            }
-                            <td class="fw-bold text-primary">@m.Parametro?.nombre_parametro</td>
-                            <td>@m.valor_analogico.ToString("F2")</td>
-                            <td>@((StatusMedicion)m.status)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
 </div>
 
+<style>
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 1020;
+    }
+
+    .blink {
+        animation: blinker 1.5s linear infinite;
+    }
+
+    @@keyframes blinker {
+        50% {
+            opacity: 0.5;
+        }
+    }
+</style>
+
 @code {
-    // ... Tus variables ...
+    [Parameter] public int SensorId { get; set; }
+
+    // Datos
     private List<Escenario> escenariosDisponibles = new();
     private List<Sensor> sensoresDisponibles = new();
     private List<Medicion> historialMediciones = new();
     private string[] availablePorts = Array.Empty<string>();
 
+    // Estado
+    private LecturaArduinoDto? datosEnVivo;
+    private DateTime ultimoPing = DateTime.MinValue;
+    private string mensajeSistema = "";
+    private string claseAlerta = "alert-info";
+    private string iconoAlerta = "bi-info-circle";
+
+    // Variables Selección
     private int selectedEscenarioId = 0;
-    private string nombreEscenarioActual = "";
     private int selectedSensorId = 0;
     private string selectedPort = "";
-    private bool isListening = false;
+    private bool buscandoPuerto = false;
 
     protected override async Task OnInitializedAsync()
     {
-        using var db = DbFactory.CreateDbContext();
-        escenariosDisponibles = await db.Escenarios.Include(e => e.Ubicacion).ToListAsync();
-        sensoresDisponibles = await db.Sensores.ToListAsync();
+        await CargarDatosIniciales();
+        ActualizarPuertosManual(); // Cargar puertos al inicio
 
-        // Usuario actual
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = await UserManager.GetUserAsync(authState.User);
-        if (user != null) SensorService.SetCurrentUser(user.Id);
+        // Suscribir evento
+        SensorService.OnDataReceived -= OnDataRecibida;
+        SensorService.OnDataReceived += OnDataRecibida;
 
-        availablePorts = SensorService.GetAvailablePorts();
-        if (availablePorts.Any()) selectedPort = availablePorts[0];
-
-        SensorService.OnDataReceived += (d) => InvokeAsync(CargarHistorial);
-        await CargarHistorial();
-    }
-
-    private async Task OnEscenarioChanged(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out int id))
+        // Si ya estaba conectado de antes, recuperamos estado
+        if (SensorService.IsConnected)
         {
-            selectedEscenarioId = id;
-            var esc = escenariosDisponibles.FirstOrDefault(x => x.escenario_id == id);
-            nombreEscenarioActual = esc?.nombre ?? "";
-            SensorService.SetCurrentEscenario(id);
-            await CargarHistorial();
+            selectedPort = SensorService.ConnectedPortName;
         }
     }
 
-    private void OnSensorChanged(ChangeEventArgs e)
+    protected override void OnParametersSet()
     {
-        if (int.TryParse(e.Value?.ToString(), out int id))
+        if (SensorId != selectedSensorId)
         {
-            selectedSensorId = id;
-            SensorService.SetCurrentSensor(id);
+            selectedSensorId = SensorId;
+            SensorService.SetCurrentSensor(SensorId);
             _ = CargarHistorial();
         }
+    }
+
+    // Lógica de Autodetección
+    private async Task DetectarAutomaticamente()
+    {
+        buscandoPuerto = true;
+        mensajeSistema = "";
+        StateHasChanged();
+
+        bool exito = await SensorService.AutoConectar();
+
+        buscandoPuerto = false;
+        if (exito)
+        {
+            selectedPort = SensorService.ConnectedPortName;
+            MostrarMensaje("¡Arduino detectado y conectado correctamente!", "success");
+        }
+        else
+        {
+            MostrarMensaje("No se encontró ningún Arduino enviando datos. Revisa el cable USB.", "warning");
+        }
+        StateHasChanged();
+    }
+
+    private void StartListeningManual()
+    {
+        if (string.IsNullOrEmpty(selectedPort)) return;
+
+        // Pasamos configuración actual al servicio
+        SensorService.SetCurrentEscenario(selectedEscenarioId);
+        SensorService.SetCurrentSensor(selectedSensorId);
+
+        if (SensorService.StartListening(selectedPort))
+        {
+            MostrarMensaje($"Conectado a {selectedPort}", "success");
+        }
+        else
+        {
+            MostrarMensaje($"Error al abrir {selectedPort}. Puede estar en uso.", "danger");
+        }
+    }
+
+    private void StopListening()
+    {
+        SensorService.StopListening();
+        datosEnVivo = null;
+        MostrarMensaje("Desconectado.", "secondary");
+    }
+
+    private void OnDataRecibida(LecturaArduinoDto data)
+    {
+        datosEnVivo = data;
+        ultimoPing = DateTime.Now;
+
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            // Si estamos guardando (Escenario seleccionado), refrescar tabla
+            if (selectedEscenarioId > 0)
+            {
+                await CargarHistorial();
+            }
+        });
+    }
+
+    private async Task CargarDatosIniciales()
+    {
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            escenariosDisponibles = await db.Escenarios.AsNoTracking().ToListAsync();
+            sensoresDisponibles = await db.Sensores.AsNoTracking().ToListAsync();
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(authState.User);
+            if (user != null) SensorService.SetCurrentUser(user.Id);
+
+            await CargarHistorial();
+        }
+        catch (Exception ex) { MostrarMensaje("Error cargando datos: " + ex.Message, "danger"); }
     }
 
     private async Task CargarHistorial()
@@ -171,30 +397,65 @@
         using var db = DbFactory.CreateDbContext();
         var q = db.Mediciones
             .Include(m => m.Parametro)
+            .Include(m => m.Sensor)
             .Include(m => m.Escenario)
+            .AsNoTracking()
             .AsQueryable();
 
-        // SI ES 0, TRAE TODO. SI NO, FILTRA.
-        if (selectedEscenarioId > 0) q = q.Where(m => m.escenario_id == selectedEscenarioId);
         if (selectedSensorId > 0) q = q.Where(m => m.sensor_id == selectedSensorId);
+        if (selectedEscenarioId > 0) q = q.Where(m => m.escenario_id == selectedEscenarioId);
 
-        historialMediciones = await q.OrderByDescending(m => m.fecha_hora).Take(100).ToListAsync();
+        historialMediciones = await q.OrderByDescending(m => m.fecha_hora).Take(50).ToListAsync();
         await InvokeAsync(StateHasChanged);
     }
 
-    private void StartListening()
+    private async Task OnEscenarioChanged(ChangeEventArgs e)
     {
-        if (selectedEscenarioId > 0 && selectedSensorId > 0)
+        if (int.TryParse(e.Value?.ToString(), out int id))
         {
-            if (SensorService.StartListening(selectedPort)) isListening = true;
+            selectedEscenarioId = id;
+            SensorService.SetCurrentEscenario(id);
+            await CargarHistorial();
         }
     }
 
-    private void StopListening()
+    private async Task OnSensorChanged(ChangeEventArgs e)
     {
-        SensorService.StopListening();
-        isListening = false;
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            selectedSensorId = id;
+            SensorService.SetCurrentSensor(id);
+            await CargarHistorial();
+        }
     }
 
-    public void Dispose() { SensorService.StopListening(); }
+    private void ActualizarPuertosManual()
+    {
+        availablePorts = SerialPort.GetPortNames();
+        if (!availablePorts.Any())
+            MostrarMensaje("No se detectan puertos COM. Conecta el USB.", "warning");
+        else
+            mensajeSistema = ""; // Limpiar si ya encontró
+    }
+
+    private void MostrarMensaje(string msg, string tipo)
+    {
+        mensajeSistema = msg;
+        claseAlerta = tipo == "success" ? "alert-success" : tipo == "danger" ? "alert-danger" : "alert-warning";
+        iconoAlerta = tipo == "success" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill";
+    }
+
+    private string GetStatusColor(StatusMedicion status) => status switch
+    {
+        StatusMedicion.Ideal => "bg-success",
+        StatusMedicion.Apta => "bg-primary",
+        StatusMedicion.NoApta => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    public void Dispose()
+    {
+        SensorService.OnDataReceived -= OnDataRecibida;
+        // No detenemos el servicio al salir de la página para que siga guardando en background si el usuario navega
+    }
 }

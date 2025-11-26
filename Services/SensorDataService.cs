@@ -28,6 +28,10 @@ namespace MonitoreoMultifuente3.Services
         // Evento para enviar datos a la UI en tiempo real
         public event Action<LecturaArduinoDto>? OnDataReceived;
 
+        // Propiedades para saber el estado desde la UI
+        public bool IsConnected => _serialPort != null && _serialPort.IsOpen;
+        public string ConnectedPortName => _serialPort?.PortName ?? "";
+
         public SensorDataService(IServiceScopeFactory scopeFactory)
         {
             _scopeFactory = scopeFactory;
@@ -37,172 +41,66 @@ namespace MonitoreoMultifuente3.Services
         public void SetCurrentEscenario(int id) => _currentEscenarioId = id;
         public void SetCurrentSensor(int id) => _currentSensorId = id;
         public void SetCurrentUser(int id) => _currentUserId = id;
-
         public string[] GetAvailablePorts() => SerialPort.GetPortNames();
 
-        // --- LÓGICA PRINCIPAL DE PROCESAMIENTO Y GUARDADO ---
-
-        private async Task ProcesarYGuardar(LecturaArduinoDto data)
+        // ==================================================================================
+        //  NUEVO: DETECCIÓN AUTOMÁTICA DE ARDUINO
+        // ==================================================================================
+        public async Task<bool> AutoConectar()
         {
-            // 1. Validar que tengamos configuración seleccionada
-            if (_currentEscenarioId == 0 || _currentSensorId == 0 || _currentUserId == 0)
+            // 1. Cerramos cualquier conexión previa
+            StopListening();
+
+            var puertos = SerialPort.GetPortNames();
+            if (puertos.Length == 0) return false;
+
+            Debug.WriteLine($"Iniciando autoconexión... Puertos visibles: {string.Join(", ", puertos)}");
+
+            // 2. Probamos puerto por puerto
+            foreach (var puerto in puertos)
             {
-                Debug.WriteLine("Datos recibidos pero NO guardados: Falta seleccionar Escenario, Sensor o Usuario.");
-                return;
-            }
-
-            // Usamos un Scope nuevo para operaciones de base de datos en segundo plano
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                // 2. Obtener qué parámetros tiene configurados este sensor en la BD
-                // (Ej: Si el sensor tiene pH y Temperatura, solo guardaremos esos)
-                var parametrosDelSensor = await db.Parametros
-                    .Where(p => p.sensor_id == _currentSensorId)
-                    .ToListAsync();
-
-                if (!parametrosDelSensor.Any()) return;
-
-                var fechaActual = DateTime.Now; // Usamos hora local del servidor/PC
-
-                // 3. Llamar a métodos individuales solo si el parámetro existe para este sensor
-
-                // --- pH ---
-                var paramPH = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("pH", StringComparison.OrdinalIgnoreCase));
-                if (paramPH != null)
+                try
                 {
-                    GuardarPH(db, data, paramPH.parametro_id, fechaActual);
+                    Debug.WriteLine($"Probando puerto {puerto}...");
+                    using (var puertoPrueba = new SerialPort(puerto, 9600))
+                    {
+                        puertoPrueba.ReadTimeout = 2500; // Esperar máx 2.5 segundos
+                        puertoPrueba.Open();
+
+                        // Esperamos un poco a que el Arduino se reinicie al abrir el puerto
+                        await Task.Delay(2000);
+
+                        // Leemos lo que haya en el buffer
+                        string datos = puertoPrueba.ReadExisting();
+                        Debug.WriteLine($"Datos recibidos en {puerto}: {datos}");
+
+                        // 3. Verificamos si es un JSON válido de NUESTRO Arduino
+                        // Buscamos claves únicas como "pH" o estructura JSON
+                        if (datos.Contains("\"pH\"") || (datos.Contains("{") && datos.Contains("}")))
+                        {
+                            Debug.WriteLine($"¡Arduino detectado en {puerto}!");
+                            puertoPrueba.Close(); // Cerramos la prueba
+
+                            // 4. Abrimos la conexión oficial
+                            return StartListening(puerto);
+                        }
+                    }
                 }
-
-                // --- Turbidez ---
-                var paramTurb = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("Turbidez", StringComparison.OrdinalIgnoreCase));
-                if (paramTurb != null)
+                catch (Exception ex)
                 {
-                    GuardarTurbidez(db, data, paramTurb.parametro_id, fechaActual);
-                }
-
-                // --- Temperatura ---
-                var paramTemp = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("Temperatura", StringComparison.OrdinalIgnoreCase));
-                if (paramTemp != null)
-                {
-                    GuardarTemperatura(db, data, paramTemp.parametro_id, fechaActual);
-                }
-
-                // --- Conductividad ---
-                var paramCond = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("Conductividad", StringComparison.OrdinalIgnoreCase));
-                if (paramCond != null)
-                {
-                    GuardarConductividad(db, data, paramCond.parametro_id, fechaActual);
-                }
-
-                // 4. Confirmar cambios en la base de datos
-                if (db.ChangeTracker.HasChanges())
-                {
-                    await db.SaveChangesAsync();
-                    Debug.WriteLine("Mediciones guardadas correctamente en la BD.");
+                    Debug.WriteLine($"Fallo al probar {puerto}: {ex.Message}");
+                    // Continuamos con el siguiente puerto...
                 }
             }
+            return false;
         }
 
-        // --- MÉTODOS INDIVIDUALES DE GUARDADO ---
-
-        private void GuardarPH(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
-        {
-            db.Mediciones.Add(new Medicion
-            {
-                escenario_id = _currentEscenarioId,
-                sensor_id = _currentSensorId,
-                user_id = _currentUserId,
-                created_by = _currentUserId,
-                parametro_id = parametroId,
-
-                fecha_hora = fecha,
-                created_at = fecha,
-                updated_at = fecha,
-
-                // Mapeo usando las propiedades del DTO (LecturaArduinoDto)
-                valor_analogico = (double)data.PH,
-                valor_cv_decimal = (decimal)data.PH_CV,
-                status = (int)MapStatus(data.PH_Status),
-
-                valor_digital = 0 // Valor por defecto si no se usa
-            });
-        }
-
-        private void GuardarTurbidez(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
-        {
-            db.Mediciones.Add(new Medicion
-            {
-                escenario_id = _currentEscenarioId,
-                sensor_id = _currentSensorId,
-                user_id = _currentUserId,
-                created_by = _currentUserId,
-                parametro_id = parametroId,
-
-                fecha_hora = fecha,
-                created_at = fecha,
-                updated_at = fecha,
-
-                valor_analogico = (double)data.Turbidez_NTU,
-                valor_cv_decimal = (decimal)data.Turbidez_CV,
-                status = (int)MapStatus(data.Turbidez_Status),
-
-                valor_digital = 0
-            });
-        }
-
-        private void GuardarTemperatura(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
-        {
-            db.Mediciones.Add(new Medicion
-            {
-                escenario_id = _currentEscenarioId,
-                sensor_id = _currentSensorId,
-                user_id = _currentUserId,
-                created_by = _currentUserId,
-                parametro_id = parametroId,
-
-                fecha_hora = fecha,
-                created_at = fecha,
-                updated_at = fecha,
-
-                valor_analogico = (double)data.Temperatura_C,
-                valor_cv_decimal = (decimal)data.Temperatura_CV,
-                status = (int)StatusMedicion.Ideal, // Temperatura siempre suele ser 'Ideal' o no aplica norma estricta igual que pH
-
-                valor_digital = 0
-            });
-        }
-
-        private void GuardarConductividad(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
-        {
-            db.Mediciones.Add(new Medicion
-            {
-                escenario_id = _currentEscenarioId,
-                sensor_id = _currentSensorId,
-                user_id = _currentUserId,
-                created_by = _currentUserId,
-                parametro_id = parametroId,
-
-                fecha_hora = fecha,
-                created_at = fecha,
-                updated_at = fecha,
-
-                valor_analogico = (double)data.Conductividad_uScm,
-                valor_cv_decimal = (decimal)data.Conductividad_CV,
-                status = (int)StatusMedicion.Ideal,
-
-                valor_digital = 0
-            });
-        }
-
-        // --- LÓGICA DE CONEXIÓN SERIAL Y PARSEO JSON ---
-
+        // --- CONEXIÓN MANUAL ---
         public bool StartListening(string portName)
         {
             try
             {
-                StopListening(); // Cerrar si había uno abierto
+                StopListening(); // Seguridad
                 _serialPort = new SerialPort(portName, 9600);
                 _serialPort.DataReceived += SerialPort_DataReceived;
                 _serialPort.Open();
@@ -210,7 +108,7 @@ namespace MonitoreoMultifuente3.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error al abrir puerto: {ex.Message}");
+                Debug.WriteLine($"Error fatal abriendo puerto: {ex.Message}");
                 return false;
             }
         }
@@ -226,29 +124,25 @@ namespace MonitoreoMultifuente3.Services
             }
         }
 
+        // --- LECTURA DE DATOS SERIALES ---
         private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             try
             {
                 SerialPort sp = (SerialPort)sender;
-                // Leemos lo que haya en el buffer
                 string data = sp.ReadExisting();
                 _jsonBuffer += data;
 
-                // Procesamos línea por línea
                 string? line;
+                // Procesamos línea por línea para asegurar JSONs completos
                 while ((line = ExtractLine()) != null)
                 {
                     ProcessJson(line);
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error lectura serial: {ex.Message}");
-            }
+            catch (Exception ex) { Debug.WriteLine($"Error lectura serial: {ex.Message}"); }
         }
 
-        // Extrae una línea completa del buffer acumulado
         private string? ExtractLine()
         {
             int idx = _jsonBuffer.IndexOf('\n');
@@ -261,31 +155,87 @@ namespace MonitoreoMultifuente3.Services
 
         private void ProcessJson(string json)
         {
-            // Validación básica de inicio de JSON
-            if (!json.StartsWith("{")) return;
+            if (!json.StartsWith("{")) return; // Validación rápida
 
             try
             {
-                // Deserializamos usando el DTO que coincide con Arduino
                 var data = JsonSerializer.Deserialize<LecturaArduinoDto>(json);
-
                 if (data != null)
                 {
-                    // 1. Notificar a la UI (Gráficas, Tablas en tiempo real)
+                    // 1. Enviar a la UI (Gráficas/Tarjetas en vivo)
                     OnDataReceived?.Invoke(data);
 
-                    // 2. Lanzar tarea de guardado en BD (Fuego y olvido)
+                    // 2. Guardar en BD en segundo plano (si corresponde)
                     Task.Run(() => ProcesarYGuardar(data));
                 }
             }
-            catch (JsonException)
+            catch (JsonException) { Debug.WriteLine("JSON incompleto o corrupto ignorado."); }
+        }
+
+        // --- LÓGICA DE GUARDADO EN BD ---
+        private async Task ProcesarYGuardar(LecturaArduinoDto data)
+        {
+            // REGLA DE ORO: Solo guardamos si el usuario seleccionó un Escenario, un Usuario y un Sensor ESPECÍFICO.
+            // Si _currentSensorId es 0 (Todos), NO guardamos, solo visualizamos.
+            if (_currentEscenarioId == 0 || _currentSensorId == 0 || _currentUserId == 0) return;
+
+            using (var scope = _scopeFactory.CreateScope())
             {
-                // Ignorar líneas incompletas o corruptas
-                Debug.WriteLine("JSON incompleto o inválido recibido.");
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Obtenemos los parámetros que TIENE este sensor en la base de datos
+                var parametros = await db.Parametros
+                    .Where(p => p.sensor_id == _currentSensorId)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                if (!parametros.Any()) return;
+
+                var fecha = DateTime.Now;
+
+                // Mapeamos el JSON a los parámetros de la BD por nombre
+                // (pH -> data.PH, Turbidez -> data.Turbidez_NTU, etc.)
+
+                var pPh = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("pH", StringComparison.OrdinalIgnoreCase));
+                if (pPh != null) GuardarMedicion(db, pPh.parametro_id, data.PH, data.PH_CV, data.PH_Status, fecha);
+
+                var pTurb = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("Turbidez", StringComparison.OrdinalIgnoreCase));
+                if (pTurb != null) GuardarMedicion(db, pTurb.parametro_id, data.Turbidez_NTU, data.Turbidez_CV, data.Turbidez_Status, fecha);
+
+                var pTemp = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("Temperatura", StringComparison.OrdinalIgnoreCase));
+                if (pTemp != null) GuardarMedicion(db, pTemp.parametro_id, data.Temperatura_C, data.Temperatura_CV, "Ideal", fecha);
+
+                var pCond = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("Conductividad", StringComparison.OrdinalIgnoreCase));
+                if (pCond != null) GuardarMedicion(db, pCond.parametro_id, data.Conductividad_uScm, data.Conductividad_CV, "Ideal", fecha);
+
+                // Guardar cambios si hubo alguno
+                if (db.ChangeTracker.HasChanges())
+                {
+                    await db.SaveChangesAsync();
+                    Debug.WriteLine("Datos guardados exitosamente en la BD.");
+                }
             }
         }
 
-        // Convierte el string del Arduino al Enum de C#
+        private void GuardarMedicion(ApplicationDbContext db, int paramId, float valor, float cv, string statusStr, DateTime fecha)
+        {
+            db.Mediciones.Add(new Medicion
+            {
+                escenario_id = _currentEscenarioId,
+                sensor_id = _currentSensorId,
+                user_id = _currentUserId,
+                created_by = _currentUserId,
+                parametro_id = paramId,
+                fecha_hora = fecha,
+                created_at = fecha,
+                updated_at = fecha,
+                valor_analogico = (double)valor,
+                valor_cv_decimal = (decimal)cv,
+                status = (int)MapStatus(statusStr),
+                valor_digital = 0
+            });
+        }
+
         private StatusMedicion MapStatus(string? s) => s?.ToLower() switch
         {
             "ideal" => StatusMedicion.Ideal,
@@ -294,7 +244,7 @@ namespace MonitoreoMultifuente3.Services
             "no apta" => StatusMedicion.NoApta,
             "no_apto" => StatusMedicion.NoApta,
             "fuera_norma" => StatusMedicion.NoApta,
-            _ => StatusMedicion.Ideal // Valor por defecto
+            _ => StatusMedicion.Ideal
         };
 
         public void Dispose()
