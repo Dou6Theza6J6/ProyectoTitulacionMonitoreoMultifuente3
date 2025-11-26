@@ -4,13 +4,13 @@ using System.Diagnostics;
 using MonitoreoMultifuente3.Data;
 using MonitoreoMultifuente3.Models;
 using MonitoreoMultifuente3.DTOs;
-using MonitoreoMultifuente3.Enums;
+using MonitoreoMultifuente3.Enums; // <--- Importante para StatusMedicion
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace MonitoreoMultifuente3.Services
 {
@@ -20,9 +20,10 @@ namespace MonitoreoMultifuente3.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private string _jsonBuffer = string.Empty;
 
-        // --- Variables de Configuración (Seleccionadas en la UI) ---
+        // Variables de configuración seleccionadas en la interfaz
         private int _currentEscenarioId = 0;
-        private int _currentSensorId = 0; // <--- NUEVO: ID del sensor físico seleccionado
+        private int _currentSensorId = 0;
+        private int _currentUserId = 0;
 
         public event Action<LecturaArduinoDto>? OnDataReceived;
 
@@ -31,46 +32,183 @@ namespace MonitoreoMultifuente3.Services
             _scopeFactory = scopeFactory;
         }
 
-        // Método para recibir el Escenario desde Monitoreo.razor
-        public void SetCurrentEscenario(int escenarioId)
+        // --- Métodos de Configuración (llamados desde Monitoreo.razor) ---
+        public void SetCurrentEscenario(int id) => _currentEscenarioId = id;
+        public void SetCurrentSensor(int id) => _currentSensorId = id;
+        public void SetCurrentUser(int id) => _currentUserId = id;
+
+        public string[] GetAvailablePorts() => SerialPort.GetPortNames();
+
+        // --- LÓGICA PRINCIPAL DE PROCESAMIENTO ---
+
+        // Este método orquesta el guardado llamando a las funciones individuales
+        private async Task ProcesarYGuardar(LecturaArduinoDto data)
         {
-            _currentEscenarioId = escenarioId;
-            Debug.WriteLine($"[SensorService] Escenario ID: {_currentEscenarioId}");
+            // 1. Validar que tengamos configuración
+            if (_currentEscenarioId == 0 || _currentSensorId == 0 || _currentUserId == 0)
+            {
+                Debug.WriteLine("Datos recibidos pero NO guardados: Falta seleccionar Escenario, Sensor o Usuario.");
+                return;
+            }
+
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // 2. Obtener parámetros configurados para el sensor actual en la BD
+                var parametrosDelSensor = await db.Parametros
+                    .Where(p => p.sensor_id == _currentSensorId)
+                    .ToListAsync();
+
+                if (!parametrosDelSensor.Any()) return;
+
+                var fechaActual = DateTime.UtcNow;
+
+                // 3. Llamar a métodos individuales si el parámetro existe en la BD
+
+                // --- pH ---
+                var paramPH = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("pH", StringComparison.OrdinalIgnoreCase));
+                if (paramPH != null)
+                {
+                    GuardarPH(db, data, paramPH.parametro_id, fechaActual);
+                }
+
+                // --- Turbidez ---
+                var paramTurb = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("Turbidez", StringComparison.OrdinalIgnoreCase));
+                if (paramTurb != null)
+                {
+                    GuardarTurbidez(db, data, paramTurb.parametro_id, fechaActual);
+                }
+
+                // --- Temperatura ---
+                var paramTemp = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("Temperatura", StringComparison.OrdinalIgnoreCase));
+                if (paramTemp != null)
+                {
+                    GuardarTemperatura(db, data, paramTemp.parametro_id, fechaActual);
+                }
+
+                // --- Conductividad ---
+                var paramCond = parametrosDelSensor.FirstOrDefault(p => p.nombre_parametro.Equals("Conductividad", StringComparison.OrdinalIgnoreCase));
+                if (paramCond != null)
+                {
+                    GuardarConductividad(db, data, paramCond.parametro_id, fechaActual);
+                }
+
+                // 4. Confirmar cambios en la base de datos
+                if (db.ChangeTracker.HasChanges())
+                {
+                    await db.SaveChangesAsync();
+                    Debug.WriteLine("Mediciones guardadas correctamente por métodos individuales.");
+                }
+            }
         }
 
-        // --- NUEVO MÉTODO: Configurar Sensor Físico ---
-        public void SetCurrentSensor(int sensorId)
+        // --- MÉTODOS INDIVIDUALES DE GUARDADO ---
+        // Cada uno se encarga de crear el objeto Medicion con los datos correctos
+
+        private void GuardarPH(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
         {
-            _currentSensorId = sensorId;
-            Debug.WriteLine($"[SensorService] Sensor ID: {_currentSensorId}");
+            db.Mediciones.Add(new Medicion
+            {
+                escenario_id = _currentEscenarioId,
+                sensor_id = _currentSensorId,
+                user_id = _currentUserId,
+                created_by = _currentUserId,
+                parametro_id = parametroId,
+                fecha_hora = fecha,
+                created_at = fecha,
+                updated_at = fecha,
+
+                // CORRECCIÓN: Usamos los nombres exactos de tu DTO (PascalCase)
+                valor_analogico = (double)data.PH,
+                valor_cv_decimal = (decimal)data.PhCV,
+                status = (int)MapStatus(data.PhStatus)
+            });
         }
 
-        public string[] GetAvailablePorts()
+        private void GuardarTurbidez(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
         {
-            return SerialPort.GetPortNames();
+            db.Mediciones.Add(new Medicion
+            {
+                escenario_id = _currentEscenarioId,
+                sensor_id = _currentSensorId,
+                user_id = _currentUserId,
+                created_by = _currentUserId,
+                parametro_id = parametroId,
+                fecha_hora = fecha,
+                created_at = fecha,
+                updated_at = fecha,
+
+                valor_analogico = (double)data.TurbidezNTU,
+                valor_cv_decimal = (decimal)data.TurbidezCV,
+                status = (int)MapStatus(data.TurbidezStatus)
+            });
         }
+
+        private void GuardarTemperatura(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
+        {
+            db.Mediciones.Add(new Medicion
+            {
+                escenario_id = _currentEscenarioId,
+                sensor_id = _currentSensorId,
+                user_id = _currentUserId,
+                created_by = _currentUserId,
+                parametro_id = parametroId,
+                fecha_hora = fecha,
+                created_at = fecha,
+                updated_at = fecha,
+
+                valor_analogico = (double)data.TemperaturaC,
+                valor_cv_decimal = (decimal)data.TemperaturaCV,
+                status = (int)StatusMedicion.Ideal
+            });
+        }
+
+        private void GuardarConductividad(ApplicationDbContext db, LecturaArduinoDto data, int parametroId, DateTime fecha)
+        {
+            db.Mediciones.Add(new Medicion
+            {
+                escenario_id = _currentEscenarioId,
+                sensor_id = _currentSensorId,
+                user_id = _currentUserId,
+                created_by = _currentUserId,
+                parametro_id = parametroId,
+                fecha_hora = fecha,
+                created_at = fecha,
+                updated_at = fecha,
+
+                valor_analogico = (double)data.ConductividadUsScm,
+                valor_cv_decimal = (decimal)data.ConductividadCV,
+                status = (int)StatusMedicion.Ideal
+            });
+        }
+
+        // --- LÓGICA DE CONEXIÓN Y PARSEO JSON ---
 
         public bool StartListening(string portName)
         {
             try
             {
-                if (_serialPort != null)
-                {
-                    if (_serialPort.IsOpen) _serialPort.Close();
-                    _serialPort.DataReceived -= SerialPort_DataReceived;
-                    _serialPort.Dispose();
-                }
-
+                StopListening();
                 _serialPort = new SerialPort(portName, 9600);
                 _serialPort.DataReceived += SerialPort_DataReceived;
                 _serialPort.Open();
-                Debug.WriteLine($"Serial port {portName} opened.");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error opening serial port: {ex.Message}");
+                Debug.WriteLine($"Error puerto: {ex.Message}");
                 return false;
+            }
+        }
+
+        public void StopListening()
+        {
+            if (_serialPort != null && _serialPort.IsOpen)
+            {
+                _serialPort.Close();
+                _serialPort.Dispose();
+                _serialPort = null;
             }
         }
 
@@ -78,140 +216,54 @@ namespace MonitoreoMultifuente3.Services
         {
             try
             {
-                SerialPort sp = (SerialPort)sender;
-                _jsonBuffer += sp.ReadExisting();
-
+                _jsonBuffer += ((SerialPort)sender).ReadExisting();
                 string? line;
-                while ((line = ReadLineFromBuffer()) != null)
+                while ((line = ExtractLine()) != null)
                 {
-                    ProcessJsonLine(line);
+                    ProcessJson(line);
                 }
             }
-            catch (Exception ex) { Debug.WriteLine(ex.Message); }
+            catch (Exception ex) { Debug.WriteLine($"Error lectura: {ex.Message}"); }
         }
 
-        private string? ReadLineFromBuffer()
+        private string? ExtractLine()
         {
-            int newlineIndex = _jsonBuffer.IndexOf('\n');
-            if (newlineIndex == -1) return null;
-
-            string line = _jsonBuffer.Substring(0, newlineIndex).Trim();
-            _jsonBuffer = _jsonBuffer.Substring(newlineIndex + 1);
+            int idx = _jsonBuffer.IndexOf('\n');
+            if (idx == -1) return null;
+            string line = _jsonBuffer.Substring(0, idx).Trim();
+            _jsonBuffer = _jsonBuffer.Substring(idx + 1);
             return line;
         }
 
-        private void ProcessJsonLine(string jsonString)
+        private void ProcessJson(string json)
         {
-            if (string.IsNullOrWhiteSpace(jsonString) || !jsonString.StartsWith("{")) return;
+            if (!json.StartsWith("{")) return;
 
             try
             {
-                LecturaArduinoDto? lectura = JsonSerializer.Deserialize<LecturaArduinoDto>(jsonString);
-
-                if (lectura != null)
+                var data = JsonSerializer.Deserialize<LecturaArduinoDto>(json);
+                if (data != null)
                 {
-                    // 1. Notificar a la UI
-                    OnDataReceived?.Invoke(lectura);
+                    // Notificar UI
+                    OnDataReceived?.Invoke(data);
 
-                    // 2. Guardar en BD (Solo si tenemos Escenario Y Sensor seleccionados)
-                    if (_currentEscenarioId > 0 && _currentSensorId > 0)
-                    {
-                        Task.Run(() => SaveDataToDatabase(lectura));
-                    }
+                    // Lanzar tarea de guardado
+                    Task.Run(() => ProcesarYGuardar(data));
                 }
             }
-            catch (JsonException ex) { Debug.WriteLine($"Error JSON: {ex.Message}"); }
+            catch (JsonException) { /* Ignorar JSON incompleto */ }
         }
 
-        private async Task SaveDataToDatabase(LecturaArduinoDto lectura)
+        private StatusMedicion MapStatus(string? s) => s?.ToLower() switch
         {
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                // --- CLAVE: Buscar parámetros que pertenezcan al sensor seleccionado ---
-                var paramsDict = await dbContext.Parametros
-                    .Where(p => p.sensor_id == _currentSensorId)
-                    .ToDictionaryAsync(p => p.nombre_parametro, p => p.parametro_id);
-
-                if (!paramsDict.Any())
-                {
-                    Debug.WriteLine($"[Advertencia] El Sensor ID {_currentSensorId} no tiene parámetros configurados en la BD.");
-                    return;
-                }
-
-                var timestamp = DateTime.UtcNow;
-                int idUsuarioEjemplo = 1;
-                var mediciones = new List<Medicion>();
-
-                // Función local para mapear datos
-                void AgregarMedicion(string nombreParametro, float valor, float cv, string? status)
-                {
-                    // Buscar ID del parámetro (ignora mayúsculas/minúsculas)
-                    var key = paramsDict.Keys.FirstOrDefault(k => k.Equals(nombreParametro, StringComparison.OrdinalIgnoreCase));
-
-                    if (key != null)
-                    {
-                        mediciones.Add(new Medicion
-                        {
-                            escenario_id = _currentEscenarioId,
-                            sensor_id = _currentSensorId,       // <--- ID del Sensor REAL
-                            parametro_id = paramsDict[key],     // <--- ID del Parámetro REAL
-                            valor_analogico = (double)valor,
-                            valor_cv_decimal = (decimal)cv,
-                            status = (int)MapStatus(status),
-                            fecha_hora = timestamp,
-                            created_at = timestamp,
-                            updated_at = timestamp,
-                            user_id = idUsuarioEjemplo,
-                            created_by = idUsuarioEjemplo
-                        });
-                    }
-                }
-
-                // Mapeo exacto a tu JSON
-                AgregarMedicion("pH", lectura.PH, lectura.PHCV, lectura.PHSTATUS);
-                AgregarMedicion("Turbidez", lectura.TURBIDEZNTU, lectura.TURBIDEZCV, lectura.TURBIDEZSTATUS);
-                AgregarMedicion("Temperatura", lectura.TEMPERATURAC, lectura.TEMPERATURACV, "ideal");
-                AgregarMedicion("Conductividad", lectura.CONDUCTIVIDADUSSCM, lectura.CONDUCTIVIDADCV, "ideal");
-
-                if (mediciones.Any())
-                {
-                    await dbContext.Mediciones.AddRangeAsync(mediciones);
-                    await dbContext.SaveChangesAsync();
-                    Debug.WriteLine($"[DB] Guardadas {mediciones.Count} mediciones.");
-                }
-            }
-        }
-
-        private StatusMedicion MapStatus(string? status)
-        {
-            return status?.ToLower() switch
-            {
-                "ideal" => StatusMedicion.Ideal,
-                "apta" => StatusMedicion.Apta,
-                "cumple" => StatusMedicion.Apta,
-                "no apta" => StatusMedicion.NoApta,
-                "no_apto" => StatusMedicion.NoApta,
-                "fuera_norma" => StatusMedicion.NoApta,
-                _ => StatusMedicion.Ideal
-            };
-        }
-
-        public void StopListening()
-        {
-            try
-            {
-                if (_serialPort != null)
-                {
-                    if (_serialPort.IsOpen) _serialPort.Close();
-                    _serialPort.DataReceived -= SerialPort_DataReceived;
-                    _serialPort.Dispose();
-                    _serialPort = null;
-                }
-            }
-            catch { }
-        }
+            "ideal" => StatusMedicion.Ideal,
+            "apta" => StatusMedicion.Apta,
+            "cumple" => StatusMedicion.Apta,
+            "no apta" => StatusMedicion.NoApta,
+            "no_apto" => StatusMedicion.NoApta,
+            "fuera_norma" => StatusMedicion.NoApta,
+            _ => StatusMedicion.Ideal
+        };
 
         public void Dispose() => StopListening();
     }

@@ -1,280 +1,147 @@
 ﻿@page "/monitoreo"
-@page "/monitoreo/{SensorId:int}"
+@using MonitoreoMultifuente3.Enums
 @using MonitoreoMultifuente3.Models
 @using MonitoreoMultifuente3.Data
 @using MonitoreoMultifuente3.DTOs
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using MonitoreoMultifuente3.Services
+
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject SensorDataService SensorService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
 @implements IDisposable
 
-<PageTitle>@(SensorId == 0 ? "Monitoreo General" : $"Monitoreo: {nombreSensorActual}")</PageTitle>
+<PageTitle>Monitoreo</PageTitle>
 
 <div class="container-fluid">
-
     <div class="card mb-4 shadow-sm">
         <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">📡 Configuración @(SensorId > 0 ? $"- {nombreSensorActual}" : "")</h5>
+            <h5 class="mb-0">📡 Configuración</h5>
         </div>
         <div class="card-body">
             <div class="row align-items-end">
-                <div class="col-md-5">
-                    <label class="form-label fw-bold">1. Ubicación / Escenario:</label>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">1. Escenario:</label>
                     <select class="form-select" @onchange="OnEscenarioChanged">
-                        <option value="0">-- Seleccione Ubicación --</option>
+                        <option value="0">-- Ver Todo el Historial --</option>
                         @foreach (var esc in escenariosDisponibles)
                         {
-                            <option value="@esc.escenario_id">@esc.nombre (@esc.Ubicacion?.nombre)</option>
+                            <option value="@esc.escenario_id">@esc.nombre (@(esc.tipo_e == 1 ? "In Situ" : "Ex Situ"))</option>
                         }
                     </select>
                     @if (selectedEscenarioId > 0)
                     {
-                        <small class="text-success">✔ Guardando en: <b>@nombreEscenarioActual</b></small>
+                        <small class="text-success">✔ Guardando en: @nombreEscenarioActual</small>
+                    }
+                    else
+                    {
+
+                        <small class="text-muted">👁 Modo Visualización Global</small>
                     }
                 </div>
 
-                <div class="col-md-5">
-                    <label class="form-label fw-bold">2. Conexión Arduino:</label>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">2. Sensor:</label>
+                    <select class="form-select" @onchange="OnSensorChanged">
+                        <option value="0">-- Seleccione --</option>
+                        @foreach (var s in sensoresDisponibles)
+                        {
+                            <option value="@s.sensor_id">@s.nombre_sensor</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">3. Puerto:</label>
                     <div class="input-group">
                         <select @bind="selectedPort" class="form-select" disabled="@isListening">
-                            <option value="">Seleccionar Puerto</option>
-                            @foreach (var port in availablePorts)
+                            @foreach (var p in availablePorts)
                             {
-                                <option value="@port">@port</option>
+                                <option value="@p">@p</option>
                             }
                         </select>
-                        @if (!isListening)
+                        <button class="btn btn-primary" @onclick="StartListening"
+                                disabled="@(string.IsNullOrEmpty(selectedPort) || selectedEscenarioId == 0 || selectedSensorId == 0)">
+                            ▶
+                        </button>
+                        @if (isListening)
                         {
-                            <button class="btn btn-primary" @onclick="StartListening"
-                                    disabled="@(string.IsNullOrEmpty(selectedPort) || selectedEscenarioId == 0)">
-                                ▶ Conectar
-                            </button>
-                        }
-                        else
-                        {
-                            <button class="btn btn-danger" @onclick="StopListening">
-                                ⏹ Desconectar
-                            </button>
+                            <button class="btn btn-danger" @onclick="StopListening">⏹</button>
                         }
                     </div>
                 </div>
-
-                <div class="col-md-2 text-center">
-                    @if (isListening)
-                    {
-                        <span class="badge bg-success p-2">● En Vivo</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-secondary p-2">● Pausado</span>
-                    }
-                </div>
             </div>
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger mt-2 mb-0 p-2">@errorMessage</div>
-            }
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-lg-4 mb-4">
-            <div class="card shadow h-100 border-success">
-                <div class="card-header bg-success text-white d-flex justify-content-between">
-                    <h5 class="mb-0">⚡ Tiempo Real</h5>
-                    <small>@ultimoUpdate.ToString("HH:mm:ss")</small>
-                </div>
-                <div class="card-body">
-                    @if (latestData != null)
+    <div class="card shadow">
+        <div class="card-header bg-secondary text-white">Historial</div>
+        <div class="card-body table-responsive" style="height:500px">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        @if (selectedEscenarioId == 0)
+                        {
+                            <th>Escenario</th>
+                        }
+                        <th>Parámetro</th>
+                        <th>Valor</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in historialMediciones)
                     {
-                        <ul class="list-group list-group-flush">
-                            @if (verPH)
-                            {
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h1 class="mb-0 text-primary display-6">pH</h1>
-                                        <small class="text-muted">Potencial Hidrógeno</small>
-                                    </div>
-                                    <div class="text-end">
-                                        <h2 class="mb-0">@latestData.PH.ToString("F2")</h2>
-                                        <span class="badge bg-@GetColorStatus(latestData.PHSTATUS)">@latestData.PHSTATUS</span>
-                                    </div>
-                                </li>
-                            }
-                            @if (verTurbidez)
-                            {
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h1 class="mb-0 text-info display-6">NTU</h1>
-                                        <small class="text-muted">Turbidez</small>
-                                    </div>
-                                    <div class="text-end">
-                                        <h2 class="mb-0">@latestData.TURBIDEZNTU.ToString("F2")</h2>
-                                        <span class="badge bg-@GetColorStatus(latestData.TURBIDEZSTATUS)">@latestData.TURBIDEZSTATUS</span>
-                                    </div>
-                                </li>
-                            }
-                            <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
-                                <span class="h6 mb-0">Temp:</span>
-                                <span class="h5 mb-0">@latestData.TEMPERATURAC.ToString("F1") °C</span>
-                            </li>
-                        </ul>
-                    }
-                    else
-                    {
-                        <div class="text-center py-5 text-muted">
-                            <p>Esperando datos...</p>
-                        </div>
-                    }
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-8 mb-4">
-            <div class="card shadow h-100">
-                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">📅 Historial</h5>
-                    <button class="btn btn-sm btn-light text-dark" @onclick="CargarHistorial">🔄 Actualizar</button>
-                </div>
-                <div class="card-body p-0 table-responsive" style="max-height: 500px; overflow-y: auto;">
-                    @if (historialMediciones.Any())
-                    {
-                        <table class="table table-striped table-hover mb-0 table-sm align-middle">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>Hora</th>
-                                    <th>Parámetro</th>
-                                    <th>Valor</th>
-                                    <th>Calidad Agua</th>
-                                    <th>Estado Sensor (CV)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var item in historialMediciones)
-                                {
-                                    <tr>
-                                        <td>@item.fecha_hora.ToLocalTime().ToString("HH:mm:ss")</td>
-                                        <td class="fw-bold text-primary">@item.Parametro?.nombre_parametro</td>
-                                        <td class="fs-5">@item.valor_analogico.ToString("F2")</td>
-                                        <td>
-                                            @{
-                                                var estadoEnum = (MonitoreoMultifuente3.Enums.StatusMedicion)item.status;
-                                            }
-                                            <span class="badge bg-@GetColorStatus(estadoEnum.ToString())">@estadoEnum</span>
-                                        </td>
-
-                                        <td>
-                                            @{
-                                                decimal cv = item.valor_cv_decimal ?? 0;
-                                                string cvClase = "secondary";
-                                                string cvTexto = "Desc.";
-
-                                                if (cv == 0)
-                                                {
-                                                    cvTexto = "Inactivo (0)";
-                                                    cvClase = "secondary";
-                                                }
-                                                else if (cv >= 0.01m && cv <= 0.15m)
-                                                {
-                                                    cvTexto = "Activo ✔";
-                                                    cvClase = "success";
-                                                }
-                                                else if (cv >= 0.50m)
-                                                {
-                                                    cvTexto = "ERROR ⚠";
-                                                    cvClase = "danger";
-                                                }
-                                                else
-                                                {
-                                                    cvTexto = "Revisar";
-                                                    cvClase = "warning text-dark";
-                                                }
-                                            }
-                                            <span class="badge bg-@cvClase">@cvTexto (@cv.ToString("F2"))</span>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
-                    else
-                    {
-                        <div class="p-5 text-center text-muted">
+                        <tr>
+                            <td>@m.fecha_hora.ToLocalTime()</td>
                             @if (selectedEscenarioId == 0)
                             {
-                                <span>Seleccione un escenario.</span>
+                                <td><small>@m.Escenario?.nombre</small></td>
                             }
-                            else
-                            {
-
-                                <span>No hay registros.</span>
-                            }
-                        </div>
+                            <td class="fw-bold text-primary">@m.Parametro?.nombre_parametro</td>
+                            <td>@m.valor_analogico.ToString("F2")</td>
+                            <td>@((StatusMedicion)m.status)</td>
+                        </tr>
                     }
-                </div>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
 @code {
-    [Parameter] public int SensorId { get; set; } = 0;
-
-    private string nombreSensorActual = "General";
-    private bool verPH = true;
-    private bool verTurbidez = true;
-
+    // ... Tus variables ...
     private List<Escenario> escenariosDisponibles = new();
+    private List<Sensor> sensoresDisponibles = new();
     private List<Medicion> historialMediciones = new();
-    private LecturaArduinoDto? latestData;
-    private DateTime ultimoUpdate = DateTime.Now;
-    private string nombreEscenarioActual = "Ninguno";
-
     private string[] availablePorts = Array.Empty<string>();
-    private string selectedPort = "";
+
     private int selectedEscenarioId = 0;
+    private string nombreEscenarioActual = "";
+    private int selectedSensorId = 0;
+    private string selectedPort = "";
     private bool isListening = false;
-    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        using var context = DbFactory.CreateDbContext();
-        escenariosDisponibles = await context.Escenarios
-            .Include(e => e.Ubicacion)
-            .Where(e => e.nombre != "All") // Filtro para no mostrar el escenario 'basura' si existe
-            .OrderByDescending(e => e.created_at)
-            .ToListAsync();
+        using var db = DbFactory.CreateDbContext();
+        escenariosDisponibles = await db.Escenarios.Include(e => e.Ubicacion).ToListAsync();
+        sensoresDisponibles = await db.Sensores.ToListAsync();
 
-        if (!isListening)
-        {
-            availablePorts = SensorService.GetAvailablePorts();
-            if (availablePorts.Length > 0) selectedPort = availablePorts[0];
-        }
-        SensorService.OnDataReceived += HandleDataReceived;
-    }
+        // Usuario actual
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        if (user != null) SensorService.SetCurrentUser(user.Id);
 
-    protected override async Task OnParametersSetAsync()
-    {
-        if (SensorId > 0)
-        {
-            using var context = DbFactory.CreateDbContext();
-            var sensor = await context.Sensores.Include(s => s.Parametros).FirstOrDefaultAsync(s => s.sensor_id == SensorId);
-            if (sensor != null)
-            {
-                nombreSensorActual = sensor.nombre_sensor ?? "Desconocido";
-                var nombreLower = nombreSensorActual.ToLower();
-                bool esPh = nombreLower.Contains("ph");
-                bool esTurb = nombreLower.Contains("turbidez");
+        availablePorts = SensorService.GetAvailablePorts();
+        if (availablePorts.Any()) selectedPort = availablePorts[0];
 
-                verPH = esPh || (!esPh && !esTurb);
-                verTurbidez = esTurb || (!esPh && !esTurb);
-            }
-        }
-        else
-        {
-            verPH = true; verTurbidez = true;
-        }
-        if (selectedEscenarioId > 0) await CargarHistorial();
+        SensorService.OnDataReceived += (d) => InvokeAsync(CargarHistorial);
+        await CargarHistorial();
     }
 
     private async Task OnEscenarioChanged(ChangeEventArgs e)
@@ -282,62 +149,52 @@
         if (int.TryParse(e.Value?.ToString(), out int id))
         {
             selectedEscenarioId = id;
-            var escenario = escenariosDisponibles.FirstOrDefault(x => x.escenario_id == id);
-            nombreEscenarioActual = escenario?.nombre ?? "Desconocido"; // Usar nombre corto
-
-            SensorService.SetCurrentEscenario(selectedEscenarioId);
+            var esc = escenariosDisponibles.FirstOrDefault(x => x.escenario_id == id);
+            nombreEscenarioActual = esc?.nombre ?? "";
+            SensorService.SetCurrentEscenario(id);
             await CargarHistorial();
+        }
+    }
+
+    private void OnSensorChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            selectedSensorId = id;
+            SensorService.SetCurrentSensor(id);
+            _ = CargarHistorial();
         }
     }
 
     private async Task CargarHistorial()
     {
-        if (selectedEscenarioId == 0) return;
-        using var context = DbFactory.CreateDbContext();
-
-        var query = context.Mediciones
+        using var db = DbFactory.CreateDbContext();
+        var q = db.Mediciones
             .Include(m => m.Parametro)
-            .Where(m => m.escenario_id == selectedEscenarioId);
+            .Include(m => m.Escenario)
+            .AsQueryable();
 
-        if (SensorId > 0) query = query.Where(m => m.sensor_id == SensorId);
+        // SI ES 0, TRAE TODO. SI NO, FILTRA.
+        if (selectedEscenarioId > 0) q = q.Where(m => m.escenario_id == selectedEscenarioId);
+        if (selectedSensorId > 0) q = q.Where(m => m.sensor_id == selectedSensorId);
 
-        historialMediciones = await query.OrderByDescending(m => m.fecha_hora).Take(50).ToListAsync();
+        historialMediciones = await q.OrderByDescending(m => m.fecha_hora).Take(100).ToListAsync();
         await InvokeAsync(StateHasChanged);
     }
 
     private void StartListening()
     {
-        if (selectedEscenarioId == 0) { errorMessage = "⚠ Seleccione un escenario primero."; return; }
-        errorMessage = null;
-        SensorService.SetCurrentEscenario(selectedEscenarioId);
-        if (SensorService.StartListening(selectedPort)) isListening = true;
-        else errorMessage = $"Error al abrir {selectedPort}";
+        if (selectedEscenarioId > 0 && selectedSensorId > 0)
+        {
+            if (SensorService.StartListening(selectedPort)) isListening = true;
+        }
     }
 
     private void StopListening()
     {
-        isListening = false;
         SensorService.StopListening();
-        StateHasChanged();
+        isListening = false;
     }
 
-    private void HandleDataReceived(LecturaArduinoDto lectura)
-    {
-        latestData = lectura;
-        ultimoUpdate = DateTime.Now;
-        _ = InvokeAsync(async () => { await Task.Delay(200); await CargarHistorial(); });
-        InvokeAsync(StateHasChanged);
-    }
-
-    private string GetColorStatus(string? status)
-    {
-        if (string.IsNullOrEmpty(status)) return "secondary";
-        return status.ToLower() switch { "ideal" => "success", "apta" => "warning", "no apta" => "danger", _ => "secondary" };
-    }
-
-    public void Dispose()
-    {
-        SensorService.OnDataReceived -= HandleDataReceived;
-        if (isListening) SensorService.StopListening();
-    }
+    public void Dispose() { SensorService.StopListening(); }
 }
