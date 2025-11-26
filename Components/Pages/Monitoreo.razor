@@ -92,7 +92,30 @@
                 </div>
             </div>
 
-            <h6 class="text-primary mb-2 fw-bold small text-uppercase border-bottom pb-1">
+            <!-- PANEL DE LOG DEL SERIAL -->
+            <div class="card mt-3 shadow-sm">
+                <div class="card-header py-1 bg-dark text-white d-flex justify-content-between align-items-center">
+                    <small class="fw-bold"><i class="bi bi-terminal"></i> Log Serial</small>
+                    <button class="btn btn-sm btn-outline-light" @onclick="() => logMensajes.Clear()">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                <div class="card-body p-2" style="max-height: 160px; overflow-y:auto; font-size: 0.75rem;">
+                    @if (!logMensajes.Any())
+                    {
+                        <span class="text-muted">Sin mensajes aún...</span>
+                    }
+                    else
+                    {
+                        @foreach (var l in logMensajes)
+                        {
+                            <div>@l</div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <h6 class="text-primary mb-2 fw-bold small text-uppercase border-bottom pb-1 mt-3">
                 Lecturas en Vivo
                 @if (ultimoPing != DateTime.MinValue)
                 {
@@ -149,7 +172,7 @@
                 </div>
             }
 
-            <div class="card shadow-sm border-secondary">
+            <div class="card shadow-sm border-secondary mt-2">
                 <div class="card-header bg-secondary text-white py-1">
                     <small class="fw-bold"><i class="bi bi-database-add"></i> Configuración de Guardado</small>
                 </div>
@@ -256,12 +279,6 @@
     .blink {
         animation: blinker 1.5s linear infinite;
     }
-
-    @@keyframes blinker {
-        50% {
-            opacity: 0.5;
-        }
-    }
 </style>
 
 @code {
@@ -286,14 +303,20 @@
     private string selectedPort = "";
     private bool buscandoPuerto = false;
 
+    // Log serial
+    private List<string> logMensajes = new();
+
     protected override async Task OnInitializedAsync()
     {
         await CargarDatosIniciales();
         ActualizarPuertosManual(); // Cargar puertos al inicio
 
-        // Suscribir evento
+        // Suscribir eventos
         SensorService.OnDataReceived -= OnDataRecibida;
         SensorService.OnDataReceived += OnDataRecibida;
+
+        SensorService.OnLog -= RecibirLog;
+        SensorService.OnLog += RecibirLog;
 
         // Si ya estaba conectado de antes, recuperamos estado
         if (SensorService.IsConnected)
@@ -312,7 +335,14 @@
         }
     }
 
-    // Lógica de Autodetección
+    private void RecibirLog(string msg)
+    {
+        logMensajes.Insert(0, $"{DateTime.Now:HH:mm:ss} - {msg}");
+        if (logMensajes.Count > 80)
+            logMensajes.RemoveAt(logMensajes.Count - 1);
+        InvokeAsync(StateHasChanged);
+    }
+
     private async Task DetectarAutomaticamente()
     {
         buscandoPuerto = true;
@@ -389,7 +419,10 @@
 
             await CargarHistorial();
         }
-        catch (Exception ex) { MostrarMensaje("Error cargando datos: " + ex.Message, "danger"); }
+        catch (Exception ex)
+        {
+            MostrarMensaje("Error cargando datos: " + ex.Message, "danger");
+        }
     }
 
     private async Task CargarHistorial()
@@ -441,8 +474,14 @@
     private void MostrarMensaje(string msg, string tipo)
     {
         mensajeSistema = msg;
-        claseAlerta = tipo == "success" ? "alert-success" : tipo == "danger" ? "alert-danger" : "alert-warning";
-        iconoAlerta = tipo == "success" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill";
+        claseAlerta = tipo == "success" ? "alert-success" :
+                      tipo == "danger" ? "alert-danger" :
+                      tipo == "secondary" ? "alert-secondary" :
+                      "alert-warning";
+
+        iconoAlerta = tipo == "success" ? "bi-check-circle-fill" :
+                      tipo == "danger" ? "bi-exclamation-triangle-fill" :
+                      "bi-info-circle";
     }
 
     private string GetStatusColor(StatusMedicion status) => status switch
@@ -456,6 +495,7 @@
     public void Dispose()
     {
         SensorService.OnDataReceived -= OnDataRecibida;
-        // No detenemos el servicio al salir de la página para que siga guardando en background si el usuario navega
+        SensorService.OnLog -= RecibirLog;
+        // No detenemos el servicio al salir de la página para que siga guardando si el usuario navega
     }
 }

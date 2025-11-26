@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Ports;
 using System.Linq;
@@ -20,15 +19,15 @@ namespace MonitoreoMultifuente3.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private string _jsonBuffer = string.Empty;
 
-        // Variables de configuración seleccionadas en la interfaz
+        // Configuración
         private int _currentEscenarioId = 0;
         private int _currentSensorId = 0;
         private int _currentUserId = 0;
 
-        // Evento para enviar datos a la UI en tiempo real
+        // Eventos
         public event Action<LecturaArduinoDto>? OnDataReceived;
+        public event Action<string>? OnLog;
 
-        // Propiedades para saber el estado desde la UI
         public bool IsConnected => _serialPort != null && _serialPort.IsOpen;
         public string ConnectedPortName => _serialPort?.PortName ?? "";
 
@@ -37,78 +36,86 @@ namespace MonitoreoMultifuente3.Services
             _scopeFactory = scopeFactory;
         }
 
-        // --- Métodos de Configuración (llamados desde Monitoreo.razor) ---
         public void SetCurrentEscenario(int id) => _currentEscenarioId = id;
         public void SetCurrentSensor(int id) => _currentSensorId = id;
         public void SetCurrentUser(int id) => _currentUserId = id;
         public string[] GetAvailablePorts() => SerialPort.GetPortNames();
 
-        // ==================================================================================
-        //  NUEVO: DETECCIÓN AUTOMÁTICA DE ARDUINO
-        // ==================================================================================
+        // =========================================================================
+        //  AUTOCONEXIÓN
+        // =========================================================================
         public async Task<bool> AutoConectar()
         {
-            // 1. Cerramos cualquier conexión previa
             StopListening();
-
             var puertos = SerialPort.GetPortNames();
-            if (puertos.Length == 0) return false;
 
-            Debug.WriteLine($"Iniciando autoconexión... Puertos visibles: {string.Join(", ", puertos)}");
+            if (puertos.Length == 0)
+            {
+                OnLog?.Invoke("❌ Windows no detecta puertos. Conecta el USB.");
+                return false;
+            }
 
-            // 2. Probamos puerto por puerto
+            OnLog?.Invoke($"🔎 Escaneando {puertos.Length} puertos...");
+
             foreach (var puerto in puertos)
             {
+                if ((puerto == "COM1" || puerto == "COM2") && puertos.Length > 1) continue;
+
                 try
                 {
-                    Debug.WriteLine($"Probando puerto {puerto}...");
+                    OnLog?.Invoke($"👉 Analizando {puerto} (Esperando 13 seg)...");
+
                     using (var puertoPrueba = new SerialPort(puerto, 9600))
                     {
-                        puertoPrueba.ReadTimeout = 2500; // Esperar máx 2.5 segundos
+                        puertoPrueba.ReadTimeout = 14000;
+                        puertoPrueba.DtrEnable = true;
+                        puertoPrueba.RtsEnable = true;
                         puertoPrueba.Open();
 
-                        // Esperamos un poco a que el Arduino se reinicie al abrir el puerto
-                        await Task.Delay(2000);
+                        await Task.Delay(13000);
 
-                        // Leemos lo que haya en el buffer
-                        string datos = puertoPrueba.ReadExisting();
-                        Debug.WriteLine($"Datos recibidos en {puerto}: {datos}");
-
-                        // 3. Verificamos si es un JSON válido de NUESTRO Arduino
-                        // Buscamos claves únicas como "pH" o estructura JSON
-                        if (datos.Contains("\"pH\"") || (datos.Contains("{") && datos.Contains("}")))
+                        if (puertoPrueba.BytesToRead > 0)
                         {
-                            Debug.WriteLine($"¡Arduino detectado en {puerto}!");
-                            puertoPrueba.Close(); // Cerramos la prueba
-
-                            // 4. Abrimos la conexión oficial
+                            string datos = puertoPrueba.ReadExisting();
+                            OnLog?.Invoke($"✅ ¡DATOS RECIBIDOS! -> {datos.Substring(0, Math.Min(datos.Length, 50))}...");
+                            puertoPrueba.Close();
                             return StartListening(puerto);
+                        }
+                        else
+                        {
+                            OnLog?.Invoke($"⚠️ {puerto} sin respuesta tras 13 seg.");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Fallo al probar {puerto}: {ex.Message}");
-                    // Continuamos con el siguiente puerto...
+                    OnLog?.Invoke($"❌ {puerto}: {ex.Message}");
                 }
             }
+
+            OnLog?.Invoke("🏁 Fin del escaneo. Ningún sensor habló en el tiempo esperado.");
             return false;
         }
 
-        // --- CONEXIÓN MANUAL ---
+        // =========================================================================
+        //  CONEXIÓN MANUAL
+        // =========================================================================
         public bool StartListening(string portName)
         {
             try
             {
-                StopListening(); // Seguridad
+                StopListening();
                 _serialPort = new SerialPort(portName, 9600);
+                _serialPort.DtrEnable = true;
+                _serialPort.RtsEnable = true;
                 _serialPort.DataReceived += SerialPort_DataReceived;
                 _serialPort.Open();
+                OnLog?.Invoke($"🚀 CONECTADO A {portName}. ESPERA 10 SEGUNDOS A QUE LLEGUEN DATOS.");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error fatal abriendo puerto: {ex.Message}");
+                OnLog?.Invoke($"❌ Error al conectar {portName}: {ex.Message}");
                 return false;
             }
         }
@@ -118,13 +125,13 @@ namespace MonitoreoMultifuente3.Services
             if (_serialPort != null && _serialPort.IsOpen)
             {
                 _serialPort.DataReceived -= SerialPort_DataReceived;
-                _serialPort.Close();
+                try { _serialPort.Close(); } catch { }
                 _serialPort.Dispose();
                 _serialPort = null;
+                OnLog?.Invoke("🔌 Desconectado.");
             }
         }
 
-        // --- LECTURA DE DATOS SERIALES ---
         private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             try
@@ -133,21 +140,23 @@ namespace MonitoreoMultifuente3.Services
                 string data = sp.ReadExisting();
                 _jsonBuffer += data;
 
+                // Procesar líneas completas
                 string? line;
-                // Procesamos línea por línea para asegurar JSONs completos
                 while ((line = ExtractLine()) != null)
                 {
                     ProcessJson(line);
                 }
             }
-            catch (Exception ex) { Debug.WriteLine($"Error lectura serial: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                OnLog?.Invoke($"❌ Error lectura serial: {ex.Message}");
+            }
         }
 
         private string? ExtractLine()
         {
             int idx = _jsonBuffer.IndexOf('\n');
             if (idx == -1) return null;
-
             string line = _jsonBuffer.Substring(0, idx).Trim();
             _jsonBuffer = _jsonBuffer.Substring(idx + 1);
             return line;
@@ -155,69 +164,84 @@ namespace MonitoreoMultifuente3.Services
 
         private void ProcessJson(string json)
         {
-            if (!json.StartsWith("{")) return; // Validación rápida
+            if (!json.StartsWith("{"))
+            {
+                // líneas de ruido, ignoramos
+                return;
+            }
+
+            // Log opcional del JSON recibido
+            OnLog?.Invoke($"📥 JSON crudo: {json}");
 
             try
             {
                 var data = JsonSerializer.Deserialize<LecturaArduinoDto>(json);
                 if (data != null)
                 {
-                    // 1. Enviar a la UI (Gráficas/Tarjetas en vivo)
-                    OnDataReceived?.Invoke(data);
+                    OnLog?.Invoke($"✅ Decodificado: pH={data.PH:0.00}, NTU={data.Turbidez_NTU:0.0}, T={data.Temperatura_C:0.0}, EC={data.Conductividad_uScm:0.0}");
 
-                    // 2. Guardar en BD en segundo plano (si corresponde)
+                    OnDataReceived?.Invoke(data);
                     Task.Run(() => ProcesarYGuardar(data));
                 }
+                else
+                {
+                    OnLog?.Invoke("⚠️ JSON deserializado pero nulo.");
+                }
             }
-            catch (JsonException) { Debug.WriteLine("JSON incompleto o corrupto ignorado."); }
+            catch (Exception ex)
+            {
+                OnLog?.Invoke($"❌ JSON inválido: {ex.Message}");
+            }
         }
 
-        // --- LÓGICA DE GUARDADO EN BD ---
         private async Task ProcesarYGuardar(LecturaArduinoDto data)
         {
-            // REGLA DE ORO: Solo guardamos si el usuario seleccionó un Escenario, un Usuario y un Sensor ESPECÍFICO.
-            // Si _currentSensorId es 0 (Todos), NO guardamos, solo visualizamos.
-            if (_currentEscenarioId == 0 || _currentSensorId == 0 || _currentUserId == 0) return;
+            if (_currentEscenarioId <= 0 || _currentSensorId <= 0 || _currentUserId == 0)
+            {
+                OnLog?.Invoke("ℹ️ Datos recibidos pero NO guardados: falta Escenario/Sensor/Usuario.");
+                return;
+            }
 
             using (var scope = _scopeFactory.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                // Obtenemos los parámetros que TIENE este sensor en la base de datos
                 var parametros = await db.Parametros
                     .Where(p => p.sensor_id == _currentSensorId)
                     .AsNoTracking()
                     .ToListAsync();
 
-                if (!parametros.Any()) return;
+                if (!parametros.Any())
+                {
+                    OnLog?.Invoke("⚠️ El sensor no tiene parámetros configurados en la BD.");
+                    return;
+                }
 
                 var fecha = DateTime.Now;
 
-                // Mapeamos el JSON a los parámetros de la BD por nombre
-                // (pH -> data.PH, Turbidez -> data.Turbidez_NTU, etc.)
+                foreach (var p in parametros)
+                {
+                    if (IsParam(p, "pH"))
+                        Guardar(db, p.parametro_id, data.PH, data.PH_CV, data.PH_Status, fecha);
+                    else if (IsParam(p, "Turbidez"))
+                        Guardar(db, p.parametro_id, data.Turbidez_NTU, data.Turbidez_CV, data.Turbidez_Status, fecha);
+                    else if (IsParam(p, "Temperatura"))
+                        Guardar(db, p.parametro_id, data.Temperatura_C, data.Temperatura_CV, "Ideal", fecha);
+                    else if (IsParam(p, "Conductividad"))
+                        Guardar(db, p.parametro_id, data.Conductividad_uScm, data.Conductividad_CV, "Ideal", fecha);
+                }
 
-                var pPh = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("pH", StringComparison.OrdinalIgnoreCase));
-                if (pPh != null) GuardarMedicion(db, pPh.parametro_id, data.PH, data.PH_CV, data.PH_Status, fecha);
-
-                var pTurb = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("Turbidez", StringComparison.OrdinalIgnoreCase));
-                if (pTurb != null) GuardarMedicion(db, pTurb.parametro_id, data.Turbidez_NTU, data.Turbidez_CV, data.Turbidez_Status, fecha);
-
-                var pTemp = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("Temperatura", StringComparison.OrdinalIgnoreCase));
-                if (pTemp != null) GuardarMedicion(db, pTemp.parametro_id, data.Temperatura_C, data.Temperatura_CV, "Ideal", fecha);
-
-                var pCond = parametros.FirstOrDefault(p => p.nombre_parametro.Equals("Conductividad", StringComparison.OrdinalIgnoreCase));
-                if (pCond != null) GuardarMedicion(db, pCond.parametro_id, data.Conductividad_uScm, data.Conductividad_CV, "Ideal", fecha);
-
-                // Guardar cambios si hubo alguno
                 if (db.ChangeTracker.HasChanges())
                 {
                     await db.SaveChangesAsync();
-                    Debug.WriteLine("Datos guardados exitosamente en la BD.");
+                    OnLog?.Invoke("💾 Mediciones guardadas en BD.");
                 }
             }
         }
 
-        private void GuardarMedicion(ApplicationDbContext db, int paramId, float valor, float cv, string statusStr, DateTime fecha)
+        private bool IsParam(Parametro p, string name) =>
+            p.nombre_parametro.Equals(name, StringComparison.OrdinalIgnoreCase);
+
+        private void Guardar(ApplicationDbContext db, int paramId, float val, float cv, string status, DateTime fecha)
         {
             db.Mediciones.Add(new Medicion
             {
@@ -229,9 +253,9 @@ namespace MonitoreoMultifuente3.Services
                 fecha_hora = fecha,
                 created_at = fecha,
                 updated_at = fecha,
-                valor_analogico = (double)valor,
+                valor_analogico = (double)val,
                 valor_cv_decimal = (decimal)cv,
-                status = (int)MapStatus(statusStr),
+                status = (int)MapStatus(status),
                 valor_digital = 0
             });
         }
@@ -247,9 +271,6 @@ namespace MonitoreoMultifuente3.Services
             _ => StatusMedicion.Ideal
         };
 
-        public void Dispose()
-        {
-            StopListening();
-        }
+        public void Dispose() => StopListening();
     }
 }
