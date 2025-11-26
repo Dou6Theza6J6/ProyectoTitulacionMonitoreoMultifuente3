@@ -32,12 +32,13 @@
     <div class="row">
         <div class="col-lg-4 mb-4">
 
+            <!-- TARJETA CONEXIÓN -->
             <div class="card shadow-sm mb-3 border-primary">
                 <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold"><i class="bi bi-usb-plug-fill"></i> Conexión</h6>
                     @if (SensorService.IsConnected)
                     {
-                        <span class="badge bg-white text-success animate__animated animate__fadeIn">CONECTADO: @SensorService.ConnectedPortName</span>
+                        <span class="badge bg-white text-success">CONECTADO: @SensorService.ConnectedPortName</span>
                     }
                 </div>
                 <div class="card-body bg-light">
@@ -92,30 +93,8 @@
                 </div>
             </div>
 
-            <!-- PANEL DE LOG DEL SERIAL -->
-            <div class="card mt-3 shadow-sm">
-                <div class="card-header py-1 bg-dark text-white d-flex justify-content-between align-items-center">
-                    <small class="fw-bold"><i class="bi bi-terminal"></i> Log Serial</small>
-                    <button class="btn btn-sm btn-outline-light" @onclick="() => logMensajes.Clear()">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-                <div class="card-body p-2" style="max-height: 160px; overflow-y:auto; font-size: 0.75rem;">
-                    @if (!logMensajes.Any())
-                    {
-                        <span class="text-muted">Sin mensajes aún...</span>
-                    }
-                    else
-                    {
-                        @foreach (var l in logMensajes)
-                        {
-                            <div>@l</div>
-                        }
-                    }
-                </div>
-            </div>
-
-            <h6 class="text-primary mb-2 fw-bold small text-uppercase border-bottom pb-1 mt-3">
+            <!-- LECTURAS EN VIVO -->
+            <h6 class="text-primary mb-2 fw-bold small text-uppercase border-bottom pb-1">
                 Lecturas en Vivo
                 @if (ultimoPing != DateTime.MinValue)
                 {
@@ -132,6 +111,7 @@
                                 <small class="text-white-50 fw-bold text-uppercase" style="font-size:0.7rem">pH</small>
                                 <h3 class="fw-bold my-1">@datosEnVivo.PH.ToString("0.00")</h3>
                                 <span class="badge bg-white text-primary rounded-pill">@datosEnVivo.PH_Status</span>
+                                <div class="small mt-1">CV: @datosEnVivo.PH_CV.ToString("0.000")</div>
                             </div>
                         </div>
                     </div>
@@ -141,6 +121,7 @@
                                 <small class="text-white-50 fw-bold text-uppercase" style="font-size:0.7rem">Turbidez</small>
                                 <h3 class="fw-bold my-1">@datosEnVivo.Turbidez_NTU.ToString("0")</h3>
                                 <span class="badge bg-white text-info rounded-pill">NTU</span>
+                                <div class="small mt-1">CV: @datosEnVivo.Turbidez_CV.ToString("0.000")</div>
                             </div>
                         </div>
                     </div>
@@ -150,6 +131,7 @@
                                 <small class="text-black-50 fw-bold text-uppercase" style="font-size:0.7rem">Temperatura</small>
                                 <h3 class="fw-bold my-1">@datosEnVivo.Temperatura_C.ToString("0.0")°</h3>
                                 <span class="badge bg-dark text-warning rounded-pill">Celsius</span>
+                                <div class="small mt-1">CV: @datosEnVivo.Temperatura_CV.ToString("0.000")</div>
                             </div>
                         </div>
                     </div>
@@ -159,6 +141,7 @@
                                 <small class="text-white-50 fw-bold text-uppercase" style="font-size:0.7rem">Conductividad</small>
                                 <h3 class="fw-bold my-1">@datosEnVivo.Conductividad_uScm.ToString("0")</h3>
                                 <span class="badge bg-white text-success rounded-pill">uS/cm</span>
+                                <div class="small mt-1">CV: @datosEnVivo.Conductividad_CV.ToString("0.000")</div>
                             </div>
                         </div>
                     </div>
@@ -172,7 +155,8 @@
                 </div>
             }
 
-            <div class="card shadow-sm border-secondary mt-2">
+            <!-- CONFIGURACIÓN DE GUARDADO -->
+            <div class="card shadow-sm border-secondary">
                 <div class="card-header bg-secondary text-white py-1">
                     <small class="fw-bold"><i class="bi bi-database-add"></i> Configuración de Guardado</small>
                 </div>
@@ -182,7 +166,9 @@
                         <option value="0">-- Todos (Solo ver, NO guardar) --</option>
                         @foreach (var esc in escenariosDisponibles)
                         {
-                            <option value="@esc.escenario_id" selected="@(selectedEscenarioId == esc.escenario_id)">@esc.nombre</option>
+                            <option value="@esc.escenario_id" selected="@(selectedEscenarioId == esc.escenario_id)">
+                                @esc.nombre
+                            </option>
                         }
                     </select>
 
@@ -205,6 +191,7 @@
             </div>
         </div>
 
+        <!-- HISTORIAL -->
         <div class="col-lg-8">
             <div class="card shadow h-100">
                 <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center border-bottom">
@@ -228,6 +215,7 @@
                                     <th>Sensor</th>
                                     <th>Param.</th>
                                     <th>Valor</th>
+                                    <th>CV</th>    @* ← NUEVA COLUMNA *@
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -235,7 +223,7 @@
                                 @if (historialMediciones == null || !historialMediciones.Any())
                                 {
                                     <tr>
-                                        <td colspan="6" class="text-center py-5 text-muted">
+                                        <td colspan="7" class="text-center py-5 text-muted">
                                             <i class="bi bi-inbox fs-1 opacity-25 d-block mb-2"></i>
                                             No hay datos guardados.<br />
                                             <small>Asegúrate de seleccionar un Escenario para empezar a guardar.</small>
@@ -252,6 +240,7 @@
                                             <td class="small">@(m.Sensor?.nombre_sensor ?? "-")</td>
                                             <td class="fw-bold text-primary small">@m.Parametro?.nombre_parametro</td>
                                             <td class="fw-bold">@m.valor_analogico.ToString("0.00")</td>
+                                            <td class="small">@((m.valor_cv_decimal.HasValue) ? m.valor_cv_decimal.Value.ToString("0.000") : "-")</td> @* ← CV EN HISTORIAL corregido *@
                                             <td>
                                                 <span class="badge rounded-pill @GetStatusColor((StatusMedicion)m.status)">
                                                     @((StatusMedicion)m.status)
@@ -275,50 +264,35 @@
         top: 0;
         z-index: 1020;
     }
-
-    .blink {
-        animation: blinker 1.5s linear infinite;
-    }
 </style>
 
 @code {
     [Parameter] public int SensorId { get; set; }
 
-    // Datos
     private List<Escenario> escenariosDisponibles = new();
     private List<Sensor> sensoresDisponibles = new();
     private List<Medicion> historialMediciones = new();
     private string[] availablePorts = Array.Empty<string>();
 
-    // Estado
     private LecturaArduinoDto? datosEnVivo;
     private DateTime ultimoPing = DateTime.MinValue;
     private string mensajeSistema = "";
     private string claseAlerta = "alert-info";
     private string iconoAlerta = "bi-info-circle";
 
-    // Variables Selección
     private int selectedEscenarioId = 0;
     private int selectedSensorId = 0;
     private string selectedPort = "";
     private bool buscandoPuerto = false;
 
-    // Log serial
-    private List<string> logMensajes = new();
-
     protected override async Task OnInitializedAsync()
     {
         await CargarDatosIniciales();
-        ActualizarPuertosManual(); // Cargar puertos al inicio
+        ActualizarPuertosManual();
 
-        // Suscribir eventos
         SensorService.OnDataReceived -= OnDataRecibida;
         SensorService.OnDataReceived += OnDataRecibida;
 
-        SensorService.OnLog -= RecibirLog;
-        SensorService.OnLog += RecibirLog;
-
-        // Si ya estaba conectado de antes, recuperamos estado
         if (SensorService.IsConnected)
         {
             selectedPort = SensorService.ConnectedPortName;
@@ -333,14 +307,6 @@
             SensorService.SetCurrentSensor(SensorId);
             _ = CargarHistorial();
         }
-    }
-
-    private void RecibirLog(string msg)
-    {
-        logMensajes.Insert(0, $"{DateTime.Now:HH:mm:ss} - {msg}");
-        if (logMensajes.Count > 80)
-            logMensajes.RemoveAt(logMensajes.Count - 1);
-        InvokeAsync(StateHasChanged);
     }
 
     private async Task DetectarAutomaticamente()
@@ -368,7 +334,6 @@
     {
         if (string.IsNullOrEmpty(selectedPort)) return;
 
-        // Pasamos configuración actual al servicio
         SensorService.SetCurrentEscenario(selectedEscenarioId);
         SensorService.SetCurrentSensor(selectedSensorId);
 
@@ -397,7 +362,6 @@
         InvokeAsync(async () =>
         {
             StateHasChanged();
-            // Si estamos guardando (Escenario seleccionado), refrescar tabla
             if (selectedEscenarioId > 0)
             {
                 await CargarHistorial();
@@ -419,10 +383,7 @@
 
             await CargarHistorial();
         }
-        catch (Exception ex)
-        {
-            MostrarMensaje("Error cargando datos: " + ex.Message, "danger");
-        }
+        catch (Exception ex) { MostrarMensaje("Error cargando datos: " + ex.Message, "danger"); }
     }
 
     private async Task CargarHistorial()
@@ -468,20 +429,20 @@
         if (!availablePorts.Any())
             MostrarMensaje("No se detectan puertos COM. Conecta el USB.", "warning");
         else
-            mensajeSistema = ""; // Limpiar si ya encontró
+            mensajeSistema = "";
     }
 
     private void MostrarMensaje(string msg, string tipo)
     {
         mensajeSistema = msg;
-        claseAlerta = tipo == "success" ? "alert-success" :
-                      tipo == "danger" ? "alert-danger" :
-                      tipo == "secondary" ? "alert-secondary" :
-                      "alert-warning";
+        claseAlerta = tipo == "success" ? "alert-success"
+                     : tipo == "danger" ? "alert-danger"
+                     : tipo == "secondary" ? "alert-secondary"
+                     : "alert-warning";
 
-        iconoAlerta = tipo == "success" ? "bi-check-circle-fill" :
-                      tipo == "danger" ? "bi-exclamation-triangle-fill" :
-                      "bi-info-circle";
+        iconoAlerta = tipo == "success" ? "bi-check-circle-fill"
+                     : tipo == "danger" ? "bi-exclamation-triangle-fill"
+                     : "bi-info-circle";
     }
 
     private string GetStatusColor(StatusMedicion status) => status switch
@@ -495,7 +456,5 @@
     public void Dispose()
     {
         SensorService.OnDataReceived -= OnDataRecibida;
-        SensorService.OnLog -= RecibirLog;
-        // No detenemos el servicio al salir de la página para que siga guardando si el usuario navega
     }
 }
